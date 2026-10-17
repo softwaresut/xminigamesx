@@ -40,6 +40,11 @@ app.get(['/sw.js', '/service-worker.js'], (req, res) => {
   `);
 });
 
+// Health check / Anti-sleep ping route for keep-alive monitoring (e.g. UptimeRobot)
+app.get(['/ping', '/health'], (req, res) => {
+  res.json({ status: 'ok', uptime: Math.floor(process.uptime()), timestamp: Date.now() });
+});
+
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, '..', 'public')));
 
