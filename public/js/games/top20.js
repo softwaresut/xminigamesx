@@ -136,7 +136,7 @@
           if (!inp || !inp.value.trim()) return;
           api.send('guess', { text: inp.value });
           inp.value = '';
-          inp.focus();
+          if (window.innerWidth > 700) inp.focus();
         };
         const btn = el.querySelector('[data-act="send"]');
         if (btn) btn.onclick = send;

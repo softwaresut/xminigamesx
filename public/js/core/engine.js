@@ -399,7 +399,7 @@
           if (!input || !input.value.trim()) return;
           api.send('guess', { text: input.value });
           input.value = '';
-          input.focus();
+          if (window.innerWidth > 700) input.focus();
         };
         const btn = el.querySelector('[data-act="send"]');
         if (btn) btn.onclick = send;

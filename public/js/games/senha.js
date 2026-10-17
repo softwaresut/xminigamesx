@@ -142,7 +142,7 @@
         if (!input || input.value.trim().length !== 4) return;
         api.send('guess', { text: input.value });
         input.value = '';
-        input.focus();
+        if (window.innerWidth > 700) input.focus();
       };
       if (btn) btn.onclick = submit;
       if (input) input.onkeydown = (e) => { if (e.key === 'Enter') submit(); };
