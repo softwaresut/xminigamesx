@@ -1,0 +1,408 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>xMiniGamesx - Party Games Online Multiplayer</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@700;900&family=Righteous&family=Space+Grotesk:wght@500;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/css/style.css">
+  <script>
+    // Limpar Service Workers e caches de projetos antigos rodando na mesma porta (ex: GAME ABDUÇÃO)
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.getRegistrations().then(function(registrations) {
+        for (let registration of registrations) {
+          registration.unregister().then(function() {
+            console.log('Antigo ServiceWorker removido!');
+          });
+        }
+      });
+    }
+    if ('caches' in window) {
+      caches.keys().then(function(names) {
+        for (let name of names) caches.delete(name);
+      });
+    }
+  </script>
+</head>
+<body>
+  <canvas id="confetti-canvas"></canvas>
+
+  <!-- Top Header -->
+  <header>
+    <div class="logo-brand" id="btn-logo-home">
+      <span class="logo-badge">⚡ PARTY</span>
+      <span>x<span class="logo-text-accent">MiniGames</span>x</span>
+    </div>
+    <div class="header-actions">
+      <button class="icon-btn" id="btn-sound-toggle" title="Ligar/Desligar Som">🔊</button>
+    </div>
+  </header>
+
+  <main class="container">
+    <!-- SCREEN 1: WELCOME / ENTRY -->
+    <section class="screen active" id="screen-welcome">
+      <div class="hero-box">
+        <h1>Mini Games <span class="gradient-text">Online com Amigos</span></h1>
+        <p>Crie uma sala privada, envie o link no grupo e jogue na hora sem instalar nada!</p>
+      </div>
+
+      <div class="glass-panel profile-setup">
+        <div class="avatar-selector">
+          <div class="avatar-preview" id="user-avatar-preview" title="Clique para trocar de avatar">🦊</div>
+        </div>
+        <div class="avatar-picker-grid" id="avatar-picker-grid">
+          <!-- Emojis populated by JS -->
+        </div>
+
+        <div class="input-group">
+          <label for="input-nickname">Seu Apelido / Nick</label>
+          <input type="text" id="input-nickname" class="input-field" placeholder="Ex: Player1, Mestre..." maxlength="16">
+        </div>
+      </div>
+
+      <div class="action-cards-grid">
+        <!-- Card 1: Criar Sala -->
+        <div class="glass-panel action-card">
+          <div>
+            <div style="font-size: 2.2rem; margin-bottom: 8px;">👑</div>
+            <h3 style="font-size: 1.3rem; margin-bottom: 6px;">Criar Nova Sala</h3>
+            <p style="color: var(--text-muted); font-size: 0.95rem;">Você será o líder, escolherá os mini games e definirá as rodadas.</p>
+          </div>
+          <button class="btn-primary" id="btn-create-room">
+            <span>✨</span> Criar Sala Privada
+          </button>
+        </div>
+
+        <!-- Card 2: Entrar na Sala -->
+        <div class="glass-panel action-card">
+          <div>
+            <div style="font-size: 2.2rem; margin-bottom: 8px;">🚀</div>
+            <h3 style="font-size: 1.3rem; margin-bottom: 6px;">Entrar com Código</h3>
+            <p style="color: var(--text-muted); font-size: 0.95rem;">Digite o código de 4 letras compartilhado com você.</p>
+          </div>
+          <div style="display: flex; gap: 8px;">
+            <input type="text" id="input-room-code" class="input-field" placeholder="CÓDIGO" maxlength="4" style="text-transform: uppercase; font-family: 'JetBrains Mono', monospace; font-weight: 800; text-align: center; font-size: 1.2rem; letter-spacing: 2px;">
+            <button class="btn-secondary" id="btn-join-room" style="white-space: nowrap;">Entrar ➔</button>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 2: ROOM LOBBY -->
+    <section class="screen" id="screen-lobby">
+      <div class="lobby-header">
+        <div class="room-badge-container">
+          <span style="color: var(--text-muted); font-weight: 600;">SALA:</span>
+          <div class="room-code-tag" id="lobby-room-code">----</div>
+          <button class="btn-secondary" id="btn-copy-code" style="padding: 8px 12px; font-size: 0.85rem;" title="Copiar Código">📋 Código</button>
+          <button class="btn-secondary" id="btn-copy-link" style="padding: 8px 12px; font-size: 0.85rem;" title="Copiar Link de Convite">🔗 Link de Convite</button>
+        </div>
+        <div id="lobby-host-indicator" style="font-size: 0.9rem; color: var(--amber-glow); font-weight: 700;"></div>
+      </div>
+
+      <div class="lobby-layout">
+        <!-- Coluna Esquerda: Seleção de Jogos e Início -->
+        <div class="glass-panel">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+            <h3>Escolha o Mini Game</h3>
+            <span style="font-size: 0.85rem; color: var(--text-muted);" id="lobby-game-picker-hint">O líder escolhe o jogo</span>
+          </div>
+
+          <div class="game-cards-carousel" id="lobby-game-cards">
+            <!-- Game 1: Não Responda a Mesma Resposta -->
+            <div class="game-select-card selected" data-game-id="nao-responda">
+              <span class="badge badge-purple">Party / Criatividade</span>
+              <h4 style="font-size: 1.1rem;">💡 Não Responda Igual</h4>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">
+                Responda rápido! Resposta única vale <b>10 pts</b>, respostas repetidas valem <b>5 pts</b>. Não repita!
+              </p>
+            </div>
+
+            <!-- Game 2: 3 Dicas -->
+            <div class="game-select-card" data-game-id="tres-dicas">
+              <span class="badge badge-cyan">Raciocínio / Silvio</span>
+              <h4 style="font-size: 1.1rem;">🔍 Jogo das 3 Dicas</h4>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">
+                Três pistas progressivas. Quanto mais cedo você descobrir o segredo, mais pontos fatura!
+              </p>
+            </div>
+
+            <!-- Game 3: Jogo da Senha -->
+            <div class="game-select-card" data-game-id="jogo-senha">
+              <span class="badge badge-amber">Lógica / Duelos</span>
+              <h4 style="font-size: 1.1rem;">🔐 Jogo da Senha</h4>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">
+                Adivinhe o código de 4 dígitos. Feedback em cores (Verde, Amarelo, Vermelho). Modos Fácil e Difícil!
+              </p>
+            </div>
+
+            <!-- Game 4: Botão Rápido -->
+            <div class="game-select-card" data-game-id="botao-rapido">
+              <span class="badge badge-rose">Reflexo / Torta na Cara</span>
+              <h4 style="font-size: 1.1rem;">🚨 Botão Rápido</h4>
+              <p style="font-size: 0.85rem; color: var(--text-muted);">
+                Quem apertar o botão primeiro ganha a chance de responder e pontuar. Não vacile!
+              </p>
+            </div>
+          </div>
+
+          <!-- Configurações da Rodada -->
+          <div id="lobby-settings-box" style="margin: 20px 0; padding: 14px; background: rgba(0,0,0,0.25); border-radius: var(--radius-md); border: 1px solid var(--bg-card-border);">
+            <h5 style="margin-bottom: 10px; color: var(--text-muted); font-size: 0.85rem; text-transform: uppercase;">Configurações da Partida</h5>
+            <div style="display: flex; flex-wrap: wrap; gap: 16px;">
+              <div class="input-group" style="flex: 1; min-width: 140px;">
+                <label for="setting-rounds">Qtd. de Rodadas</label>
+                <select id="setting-rounds" class="input-field" style="padding: 10px;">
+                  <option value="3">3 Rodadas</option>
+                  <option value="5" selected>5 Rodadas</option>
+                  <option value="7">7 Rodadas</option>
+                  <option value="10">10 Rodadas</option>
+                </select>
+              </div>
+              <div class="input-group" style="flex: 1; min-width: 140px;" id="box-setting-timer">
+                <label for="setting-timer">Tempo por Rodada</label>
+                <select id="setting-timer" class="input-field" style="padding: 10px;">
+                  <option value="15">15 segundos</option>
+                  <option value="20" selected>20 segundos</option>
+                  <option value="30">30 segundos</option>
+                  <option value="45">45 segundos</option>
+                </select>
+              </div>
+              <div class="input-group" style="flex: 1; min-width: 140px;" id="box-setting-difficulty">
+                <label for="setting-difficulty">Dificuldade (Senha)</label>
+                <select id="setting-difficulty" class="input-field" style="padding: 10px;">
+                  <option value="facil" selected>Fácil (Cores nas posições)</option>
+                  <option value="dificil">Difícil (Apenas contagem)</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div style="display: flex; gap: 12px; align-items: center;">
+            <button class="btn-primary" id="btn-start-game" style="flex: 1; padding: 16px; font-size: 1.15rem;">
+              🚀 INICIAR JOGO
+            </button>
+          </div>
+        </div>
+
+        <!-- Coluna Direita: Jogadores na Sala + Reações -->
+        <div class="glass-panel" style="display: flex; flex-direction: column; justify-content: space-between;">
+          <div>
+            <div style="display: flex; justify-content: space-between; align-items: center;">
+              <h3>Jogadores (<span id="lobby-player-count">0</span>)</h3>
+            </div>
+            <div class="player-list" id="lobby-player-list">
+              <!-- Jogadores populados dinamicamente -->
+            </div>
+          </div>
+
+          <!-- Barra de reações e mini chat -->
+          <div>
+            <div class="reactions-bar">
+              <button class="emoji-btn" data-emoji="🎉">🎉</button>
+              <button class="emoji-btn" data-emoji="🔥">🔥</button>
+              <button class="emoji-btn" data-emoji="😂">😂</button>
+              <button class="emoji-btn" data-emoji="💀">💀</button>
+              <button class="emoji-btn" data-emoji="👏">👏</button>
+              <button class="emoji-btn" data-emoji="😱">😱</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 3: GAME ARENA -->
+    <section class="screen" id="screen-game">
+      <div class="game-top-bar">
+        <div>
+          <h3 id="game-active-title" style="font-size: 1.25rem;">Não Responda a Mesma Resposta</h3>
+          <span style="font-size: 0.85rem; color: var(--text-muted);" id="game-round-counter">Rodada 1 de 5</span>
+        </div>
+        <div class="timer-box" id="game-timer-display">
+          <span>⏳</span> <span id="game-timer-val">20</span>s
+        </div>
+      </div>
+
+      <!-- VIEW DO JOGO 1: NÃO RESPONDA A MESMA RESPOSTA -->
+      <div id="view-nao-responda" class="game-view">
+        <div class="question-card">
+          <div style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: var(--cyan-glow); margin-bottom: 8px;">Pergunta da Rodada</div>
+          <h2 id="nr-question-text">Carregando pergunta...</h2>
+        </div>
+
+        <!-- Form de Resposta do Jogador -->
+        <div id="nr-answering-box" style="max-width: 550px; margin: 0 auto; text-align: center;">
+          <div style="display: flex; gap: 10px; margin-bottom: 12px;">
+            <input type="text" id="input-nr-answer" class="input-field" placeholder="Sua resposta (1 palavra ou termo)..." maxlength="32" autofocus>
+            <button class="btn-primary" id="btn-nr-submit">Enviar ➔</button>
+          </div>
+          <div id="nr-answer-status" style="font-size: 0.95rem; color: var(--text-muted);">
+            Aguardando respostas... (<span id="nr-answered-count">0</span>/<span id="nr-total-count">0</span>)
+          </div>
+        </div>
+
+        <!-- Resultados da Rodada Revelados -->
+        <div id="nr-results-box" class="results-section" style="display: none;">
+          <div class="result-group uniques">
+            <div class="result-tag-badge" style="color: var(--emerald-glow);">
+              <span>🌟</span> RESPOSTAS ÚNICAS (+10 PONTOS CADA)
+            </div>
+            <div class="result-chips-list" id="nr-uniques-list"></div>
+          </div>
+
+          <div class="result-group duplicates">
+            <div class="result-tag-badge" style="color: var(--amber-glow);">
+              <span>👥</span> RESPOSTAS REPETIDAS (+5 PONTOS CADA)
+            </div>
+            <div class="result-chips-list" id="nr-duplicates-list"></div>
+          </div>
+
+          <div class="result-group no-answer">
+            <div class="result-tag-badge" style="color: var(--rose-glow);">
+              <span>❌</span> SEM RESPOSTA / ZERADOS (0 PONTOS)
+            </div>
+            <div class="result-chips-list" id="nr-noanswers-list"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- VIEW DO JOGO 2: JOGO DAS 3 DICAS -->
+      <div id="view-tres-dicas" class="game-view" style="display: none;">
+        <div style="text-align: center; margin-bottom: 20px;">
+          <span class="badge badge-cyan" id="td-points-badge" style="font-size: 1rem; padding: 6px 16px;">Acerto vale 15 Pontos</span>
+        </div>
+        <div style="display: flex; flex-direction: column; gap: 12px; max-width: 650px; margin: 0 auto 24px auto;" id="td-clues-container">
+          <!-- Dicas 1, 2, 3 inseridas dinamicamente -->
+        </div>
+
+        <div id="td-input-box" style="max-width: 500px; margin: 0 auto; text-align: center;">
+          <div style="display: flex; gap: 10px;">
+            <input type="text" id="input-td-guess" class="input-field" placeholder="Qual é o seu palpite?">
+            <button class="btn-primary" id="btn-td-submit">Chutar!</button>
+          </div>
+          <div id="td-guess-feedback" style="margin-top: 10px; font-size: 0.95rem; min-height: 24px;"></div>
+        </div>
+
+        <div id="td-result-box" style="display: none; text-align: center; margin-top: 24px; padding: 20px; background: rgba(0,0,0,0.3); border-radius: var(--radius-lg);">
+          <h3 id="td-winner-text" style="font-size: 1.4rem; color: var(--emerald-glow);"></h3>
+          <p id="td-secret-reveal" style="font-size: 1.1rem; margin-top: 6px;"></p>
+        </div>
+      </div>
+
+      <!-- VIEW DO JOGO 3: JOGO DA SENHA -->
+      <div id="view-jogo-senha" class="game-view" style="display: none;">
+        <div style="text-align: center; margin-bottom: 16px;">
+          <h4>Descubra o Código Secreto de 4 Dígitos</h4>
+          <span style="font-size: 0.85rem; color: var(--text-muted);" id="senha-mode-label">Modo Fácil: Posição certa (Verde), Dígito existe (Amarelo), Não existe (Vermelho)</span>
+        </div>
+
+        <div style="max-width: 480px; margin: 0 auto;">
+          <div style="display: flex; gap: 8px; justify-content: center; margin-bottom: 16px;">
+            <input type="text" id="input-senha-guess" class="input-field" placeholder="Ex: 4815" maxlength="4" style="font-family: 'JetBrains Mono', monospace; font-size: 1.6rem; text-align: center; letter-spacing: 6px; width: 200px;">
+            <button class="btn-primary" id="btn-senha-submit">Testar Código</button>
+          </div>
+
+          <!-- Histórico de tentativas do jogador -->
+          <div id="senha-attempts-history" style="display: flex; flex-direction: column; gap: 8px; max-height: 240px; overflow-y: auto;">
+            <!-- Linhas de tentativas -->
+          </div>
+        </div>
+
+        <div id="senha-result-box" style="display: none; text-align: center; margin-top: 24px; padding: 20px; background: rgba(0,0,0,0.3); border-radius: var(--radius-lg);">
+          <h3 id="senha-winner-text" style="font-size: 1.4rem; color: var(--emerald-glow);"></h3>
+          <p id="senha-code-reveal" style="font-size: 1.2rem; font-family: 'JetBrains Mono', monospace; font-weight: 800; margin-top: 6px;"></p>
+        </div>
+      </div>
+
+      <!-- VIEW DO JOGO 4: BOTÃO RÁPIDO (TORTA NA CARA) -->
+      <div id="view-botao-rapido" class="game-view" style="display: none;">
+        <div class="question-card">
+          <div style="font-size: 0.85rem; text-transform: uppercase; letter-spacing: 1px; color: var(--rose-glow); margin-bottom: 8px;">Pergunta Rápida</div>
+          <h2 id="br-question-text">Carregando pergunta...</h2>
+        </div>
+
+        <div class="buzzer-container" id="br-buzzer-wrapper">
+          <button class="giant-buzzer-btn" id="btn-giant-buzzer">
+            BATER NO<br>BOTÃO! 🚨
+          </button>
+          <div id="br-buzzer-status" style="margin-top: 18px; font-weight: 700; font-size: 1.1rem; color: var(--text-muted);">
+            Seja o primeiro a bater no botão!
+          </div>
+        </div>
+
+        <!-- 4 Alternativas de resposta -->
+        <div id="br-options-container" style="display: none; grid-template-columns: 1fr 1fr; gap: 14px; max-width: 600px; margin: 0 auto;">
+          <button class="btn-secondary br-option-btn" data-index="0" style="padding: 18px; font-size: 1.05rem;"></button>
+          <button class="btn-secondary br-option-btn" data-index="1" style="padding: 18px; font-size: 1.05rem;"></button>
+          <button class="btn-secondary br-option-btn" data-index="2" style="padding: 18px; font-size: 1.05rem;"></button>
+          <button class="btn-secondary br-option-btn" data-index="3" style="padding: 18px; font-size: 1.05rem;"></button>
+        </div>
+
+        <div id="br-round-result" style="display: none; text-align: center; margin-top: 20px; padding: 18px; background: rgba(0,0,0,0.3); border-radius: var(--radius-md);">
+          <h3 id="br-round-winner-msg"></h3>
+        </div>
+      </div>
+
+      <!-- Placar Rápido da Partida (Rodapé) -->
+      <div class="glass-panel" style="margin-top: 24px; padding: 14px;">
+        <h5 style="margin-bottom: 10px; color: var(--text-muted); font-size: 0.8rem; text-transform: uppercase;">Classificação ao Vivo</h5>
+        <div style="display: flex; flex-wrap: wrap; gap: 12px;" id="game-live-scoreboard">
+          <!-- Scores -->
+        </div>
+      </div>
+    </section>
+
+    <!-- SCREEN 4: PODIUM / VENCEDORES -->
+    <section class="screen" id="screen-podium">
+      <div class="hero-box">
+        <h1 style="font-size: 2.8rem;">🏆 <span class="gradient-text">Fim de Jogo!</span></h1>
+        <p>Confira os grandes campeões da partida!</p>
+      </div>
+
+      <div class="podium-container" id="podium-pillars-box">
+        <!-- 2º Lugar -->
+        <div class="podium-col rank-2">
+          <div style="font-size: 2.2rem;" id="podium-avatar-2">🥈</div>
+          <div style="font-weight: 700; margin: 6px 0;" id="podium-name-2">-</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted);" id="podium-score-2">0 pts</div>
+          <div class="podium-pillar">2º</div>
+        </div>
+        <!-- 1º Lugar -->
+        <div class="podium-col rank-1">
+          <div style="font-size: 3rem;" id="podium-avatar-1">🥇</div>
+          <div style="font-weight: 800; font-size: 1.15rem; margin: 6px 0; color: #ffd700;" id="podium-name-1">-</div>
+          <div style="font-size: 0.95rem; font-weight: 700;" id="podium-score-1">0 pts</div>
+          <div class="podium-pillar">1º</div>
+        </div>
+        <!-- 3º Lugar -->
+        <div class="podium-col rank-3">
+          <div style="font-size: 2.2rem;" id="podium-avatar-3">🥉</div>
+          <div style="font-weight: 700; margin: 6px 0;" id="podium-name-3">-</div>
+          <div style="font-size: 0.85rem; color: var(--text-muted);" id="podium-score-3">0 pts</div>
+          <div class="podium-pillar">3º</div>
+        </div>
+      </div>
+
+      <div class="glass-panel" style="max-width: 600px; margin: 0 auto 30px auto;">
+        <h4 style="margin-bottom: 14px;">Pontuação Geral</h4>
+        <div class="player-list" id="podium-full-list"></div>
+      </div>
+
+      <div style="display: flex; gap: 14px; justify-content: center;" id="podium-actions-box">
+        <button class="btn-primary" id="btn-play-again">🔄 Jogar Novamente</button>
+        <button class="btn-secondary" id="btn-back-lobby">🏠 Voltar ao Lobby</button>
+      </div>
+    </section>
+  </main>
+
+  <!-- Toast Notification -->
+  <div id="toast">Notificação</div>
+
+  <!-- Scripts -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/sound.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>
