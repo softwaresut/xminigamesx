@@ -116,78 +116,122 @@ function updateConnectionStatus(status, text) {
 
 // Socket Connection & Events
 function setupSocket() {
+  const isVercel = window.location.hostname.includes('vercel.app');
+
+  // If on Vercel, use P2P WebRTC directly (no backend needed!)
+  if (isVercel || window.location.search.includes('p2p=1')) {
+    initP2PMode();
+    return;
+  }
+
+  // Otherwise try Socket.io (e.g. localhost)
   updateConnectionStatus('connecting', 'Conectando...');
 
-  socket = io({
-    transports: ['polling', 'websocket'],
-    reconnection: true,
-    reconnectionAttempts: 15,
-    reconnectionDelay: 1000
-  });
+  try {
+    socket = io({
+      transports: ['polling', 'websocket'],
+      reconnection: true,
+      reconnectionAttempts: 3,
+      timeout: 3000
+    });
 
-  socket.on('connect', () => {
-    myId = socket.id;
-    console.log('[Socket] Connected, ID:', myId);
+    let connectTimer = setTimeout(() => {
+      if (!socket || !socket.connected) {
+        console.log('[Network] Socket.io timed out, activating P2P WebRTC!');
+        initP2PMode();
+      }
+    }, 3500);
+
+    socket.on('connect', () => {
+      clearTimeout(connectTimer);
+      myId = socket.id;
+      console.log('[Socket] Connected, ID:', myId);
+      updateConnectionStatus('online');
+    });
+
+    socket.on('disconnect', () => {
+      updateConnectionStatus('offline');
+      showToast('Desconectado do servidor.');
+    });
+
+    socket.on('connect_error', () => {
+      if (!socket || !socket.connected) {
+        clearTimeout(connectTimer);
+        initP2PMode();
+      }
+    });
+
+    bindSocketEvents(socket);
+  } catch (err) {
+    initP2PMode();
+  }
+}
+
+function initP2PMode() {
+  if (socket && socket.isP2P) return;
+  console.log('[Network] Activating Serverless P2P WebRTC for Vercel!');
+  updateConnectionStatus('connecting', 'Ativando P2P...');
+
+  const p2p = new P2PNetworkAdapter();
+  p2p.init(() => {
+    myId = p2p.id;
     updateConnectionStatus('online');
+    console.log('[Network] P2P WebRTC Online!');
   });
 
-  socket.on('disconnect', () => {
-    updateConnectionStatus('offline');
-    showToast('Desconectado do servidor. Tentando reconectar...');
-  });
+  socket = p2p;
+  bindSocketEvents(socket);
+}
 
-  socket.on('connect_error', () => {
-    updateConnectionStatus('connecting', 'Acordando...');
-  });
-
+function bindSocketEvents(s) {
   // Room Events
-  socket.on('room_created', (room) => {
+  s.on('room_created', (room) => {
     handleRoomJoined(room);
     showToast('Sala criada com sucesso!');
   });
 
-  socket.on('room_joined', (room) => {
+  s.on('room_joined', (room) => {
     handleRoomJoined(room);
     showToast(`Você entrou na sala ${room.code}!`);
   });
 
-  socket.on('room_player_joined', ({ player, room }) => {
+  s.on('room_player_joined', ({ player, room }) => {
     currentRoom = room;
     renderLobby(room);
     showToast(`${player.avatar} ${player.nickname} entrou na sala!`);
     if (window.soundEngine) window.soundEngine.playPop();
   });
 
-  socket.on('room_player_left', ({ room }) => {
+  s.on('room_player_left', ({ room }) => {
     currentRoom = room;
     renderLobby(room);
   });
 
-  socket.on('game_selected', ({ selectedGame, room }) => {
+  s.on('game_selected', ({ selectedGame, room }) => {
     currentRoom = room;
     renderGameCards(selectedGame);
     showToast('Jogo alterado pelo líder!');
     if (window.soundEngine) window.soundEngine.playClick();
   });
 
-  socket.on('settings_updated', ({ settings }) => {
+  s.on('settings_updated', ({ settings }) => {
     if (currentRoom) currentRoom.settings = settings;
     updateSettingsDisplay(settings);
   });
 
-  socket.on('room_returned_to_lobby', (room) => {
+  s.on('room_returned_to_lobby', (room) => {
     currentRoom = room;
     showScreen('lobby');
     renderLobby(room);
     showToast('Retornaram ao Lobby!');
   });
 
-  socket.on('error_message', (msg) => {
+  s.on('error_message', (msg) => {
     showToast(msg);
   });
 
   // Global Timer Tick
-  socket.on('game_timer_tick', ({ timeLeft }) => {
+  s.on('game_timer_tick', ({ timeLeft }) => {
     const timerDisplay = document.getElementById('game-timer-display');
     const timerVal = document.getElementById('game-timer-val');
     if (timerVal) timerVal.textContent = timeLeft;
@@ -202,90 +246,90 @@ function setupSocket() {
   });
 
   // Emojis & Reactions
-  socket.on('player_reaction', ({ emoji, nickname, avatar }) => {
+  s.on('player_reaction', ({ emoji, nickname, avatar }) => {
     spawnFloatingReaction(emoji);
     if (window.soundEngine) window.soundEngine.playPop();
   });
 
   // GAME 1: NÃO RESPONDA
-  socket.on('game_round_start', (data) => {
+  s.on('game_round_start', (data) => {
     showScreen('game');
     renderNaoRespondaRound(data);
   });
 
-  socket.on('game_answered_update', ({ answeredCount, totalPlayers }) => {
+  s.on('game_answered_update', ({ answeredCount, totalPlayers }) => {
     const countEl = document.getElementById('nr-answered-count');
     const totalEl = document.getElementById('nr-total-count');
     if (countEl) countEl.textContent = answeredCount;
     if (totalEl) totalEl.textContent = totalPlayers;
   });
 
-  socket.on('game_round_result', (data) => {
+  s.on('game_round_result', (data) => {
     renderNaoRespondaResults(data);
   });
 
   // GAME 2: 3 DICAS
-  socket.on('tres_dicas_clue', (data) => {
+  s.on('tres_dicas_clue', (data) => {
     showScreen('game');
     renderTresDicasClue(data);
   });
 
-  socket.on('tres_dicas_wrong_guess', ({ player, guess }) => {
+  s.on('tres_dicas_wrong_guess', ({ player, guess }) => {
     const fb = document.getElementById('td-guess-feedback');
     if (fb) {
       fb.innerHTML = `<span style="color: var(--rose-glow);">${player.avatar} ${player.nickname} chutou: "<b>${guess}</b>" (Incorreto!)</span>`;
     }
   });
 
-  socket.on('tres_dicas_round_result', (data) => {
+  s.on('tres_dicas_round_result', (data) => {
     renderTresDicasResult(data);
   });
 
   // GAME 3: JOGO DA SENHA
-  socket.on('senha_round_start', (data) => {
+  s.on('senha_round_start', (data) => {
     showScreen('game');
     renderSenhaRound(data);
   });
 
-  socket.on('senha_guess_feedback', (data) => {
+  s.on('senha_guess_feedback', (data) => {
     renderSenhaFeedback(data);
   });
 
-  socket.on('senha_activity', ({ player, attemptsCount }) => {
+  s.on('senha_activity', ({ player, attemptsCount }) => {
     showToast(`${player.avatar} ${player.nickname} fez uma tentativa (${attemptsCount}/8)`);
   });
 
-  socket.on('senha_round_result', (data) => {
+  s.on('senha_round_result', (data) => {
     renderSenhaResult(data);
   });
 
   // GAME 4: BOTÃO RÁPIDO
-  socket.on('botao_round_start', (data) => {
+  s.on('botao_round_start', (data) => {
     showScreen('game');
     renderBotaoRound(data);
   });
 
-  socket.on('botao_buzzed', (data) => {
+  s.on('botao_buzzed', (data) => {
     handleBotaoBuzzed(data);
   });
 
-  socket.on('botao_player_failed', ({ player, reason }) => {
+  s.on('botao_player_failed', ({ player, reason }) => {
     if (player) {
       showToast(`${player.avatar} ${player.nickname} errou! (${reason})`);
     }
     if (window.soundEngine) window.soundEngine.playBuzzer();
   });
 
-  socket.on('botao_reopened', ({ questionTimeLeft, lockedOutIds }) => {
+  s.on('botao_reopened', ({ questionTimeLeft, lockedOutIds }) => {
     handleBotaoReopened(lockedOutIds);
   });
 
-  socket.on('botao_round_result', (data) => {
+  s.on('botao_round_result', (data) => {
     renderBotaoResult(data);
   });
 
   // PODIUM
-  socket.on('game_podium', (data) => {
+  s.on('game_podium', (data) => {
     renderPodium(data);
   });
 }
