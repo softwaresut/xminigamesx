@@ -1,1162 +1,437 @@
-// xMiniGamesx - Client Application Logic
+// xMiniGamesx - controlador do cliente (telas, lobby, chat, renderização do jogo)
+(function () {
+  const AVATARS = ['🦊', '🤖', '🦁', '🐯', '🐼', '🦄', '🚀', '👑', '👻', '👾', '🍕', '🎯', '🔥', '⚡', '💎', '🐉', '🥑', '🎮', '🐸', '🦖'];
+  const CATS = { all: 'Todos', quiz: 'Quiz', social: 'Social', reflexo: 'Reflexo', deducao: 'Dedução' };
+  const esc = U.esc;
+  const $ = (id) => document.getElementById(id);
 
-const AVATARS = ['🦊', '🤖', '🦁', '🐯', '🐼', '🦄', '🚀', '👑', '👻', '👾', '🍕', '🎯', '🔥', '⚡', '💎', '🐉', '🥑', '🎮'];
+  const S = {
+    me: {
+      id: null,
+      nickname: localStorage.getItem('x_nickname') || `Jogador${Math.floor(Math.random() * 900 + 100)}`,
+      avatar: localStorage.getItem('x_avatar') || AVATARS[Math.floor(Math.random() * AVATARS.length)]
+    },
+    net: null,
+    host: null,
+    room: null,
+    view: null,
+    filter: 'all',
+    lastCue: 0,
+    timerEnd: 0,
+    lastTick: -1,
+    chatOpen: false,
+    unread: 0
+  };
 
-// State
-let socket = null;
-let currentUser = {
-  nickname: localStorage.getItem('x_nickname') || `Jogador_${Math.floor(Math.random() * 899 + 100)}`,
-  avatar: localStorage.getItem('x_avatar') || AVATARS[Math.floor(Math.random() * AVATARS.length)]
-};
-let currentRoom = null;
-let isHost = false;
-let myId = null;
-
-// DOM Elements
-const screens = {
-  welcome: document.getElementById('screen-welcome'),
-  lobby: document.getElementById('screen-lobby'),
-  game: document.getElementById('screen-game'),
-  podium: document.getElementById('screen-podium')
-};
-
-const toastEl = document.getElementById('toast');
-const soundBtn = document.getElementById('btn-sound-toggle');
-const nicknameInput = document.getElementById('input-nickname');
-const avatarPreview = document.getElementById('user-avatar-preview');
-const avatarGrid = document.getElementById('avatar-picker-grid');
-
-// Show Screen Helper
-function showScreen(screenKey) {
-  Object.values(screens).forEach(s => s.classList.remove('active'));
-  if (screens[screenKey]) {
-    screens[screenKey].classList.add('active');
-  }
-}
-
-// Toast Helper
-let toastTimeout = null;
-function showToast(msg) {
-  if (toastTimeout) clearTimeout(toastTimeout);
-  toastEl.textContent = msg;
-  toastEl.classList.add('show');
-  toastTimeout = setTimeout(() => {
-    toastEl.classList.remove('show');
-  }, 2600);
-}
-
-// Init Setup
-function initApp() {
-  nicknameInput.value = currentUser.nickname;
-  avatarPreview.textContent = currentUser.avatar;
-
-  // Render avatar picker
-  avatarGrid.innerHTML = '';
-  AVATARS.forEach(av => {
-    const btn = document.createElement('div');
-    btn.className = `avatar-opt ${av === currentUser.avatar ? 'selected' : ''}`;
-    btn.textContent = av;
-    btn.addEventListener('click', () => {
-      currentUser.avatar = av;
-      avatarPreview.textContent = av;
-      localStorage.setItem('x_avatar', av);
-      document.querySelectorAll('.avatar-opt').forEach(el => el.classList.remove('selected'));
-      btn.classList.add('selected');
-      if (window.soundEngine) window.soundEngine.playPop();
-    });
-    avatarGrid.appendChild(btn);
-  });
-
-  nicknameInput.addEventListener('input', (e) => {
-    currentUser.nickname = e.target.value.trim() || 'Jogador';
-    localStorage.setItem('x_nickname', currentUser.nickname);
-  });
-
-  // Sound toggle button
-  soundBtn.addEventListener('click', () => {
-    const muted = window.soundEngine.toggleMute();
-    soundBtn.textContent = muted ? '🔇' : '🔊';
-  });
-
-  // Check URL query for room code (?sala=CODE or ?code=CODE)
-  const params = new URLSearchParams(window.location.search);
-  const codeParam = params.get('sala') || params.get('code');
-  if (codeParam) {
-    const inputCode = document.getElementById('input-room-code');
-    if (inputCode) inputCode.value = codeParam.toUpperCase().slice(0, 4);
+  // ---------------- utilidades de UI ----------------
+  function showScreen(name) {
+    document.querySelectorAll('.screen').forEach((s) => s.classList.remove('active'));
+    const el = $('screen-' + name);
+    if (el) el.classList.add('active');
+    $('chat-fab').style.display = name === 'welcome' ? 'none' : 'flex';
   }
 
-  // Connect to Socket.io
-  setupSocket();
-}
-
-// Socket Connection & Events
-function updateConnectionStatus(status, text) {
-  const dot = document.getElementById('server-status-dot');
-  const txt = document.getElementById('server-status-text');
-  if (!dot || !txt) return;
-
-  if (status === 'online') {
-    dot.style.background = 'var(--acid-lime)';
-    dot.style.boxShadow = '0 0 10px var(--acid-lime)';
-    txt.textContent = 'ONLINE';
-    txt.style.color = 'var(--acid-lime)';
-  } else if (status === 'connecting') {
-    dot.style.background = 'var(--solar-yellow)';
-    dot.style.boxShadow = '0 0 8px var(--solar-yellow)';
-    txt.textContent = text || 'Conectando...';
-    txt.style.color = 'var(--solar-yellow)';
-  } else {
-    dot.style.background = 'var(--punch-pink)';
-    dot.style.boxShadow = '0 0 8px var(--punch-pink)';
-    txt.textContent = 'Desconectado';
-    txt.style.color = 'var(--punch-pink)';
-  }
-}
-
-// Socket Connection & Events
-function setupSocket() {
-  const isVercel = window.location.hostname.includes('vercel.app');
-
-  // If on Vercel, use P2P WebRTC directly (no backend needed!)
-  if (isVercel || window.location.search.includes('p2p=1')) {
-    initP2PMode();
-    return;
+  let toastT = null;
+  function toast(msg) {
+    const t = $('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(toastT);
+    toastT = setTimeout(() => t.classList.remove('show'), 2800);
   }
 
-  // Otherwise try Socket.io (e.g. localhost)
-  updateConnectionStatus('connecting', 'Conectando...');
-
-  try {
-    socket = io({
-      transports: ['polling', 'websocket'],
-      reconnection: true,
-      reconnectionAttempts: 3,
-      timeout: 3000
-    });
-
-    let connectTimer = setTimeout(() => {
-      if (!socket || !socket.connected) {
-        console.log('[Network] Socket.io timed out, activating P2P WebRTC!');
-        initP2PMode();
-      }
-    }, 3500);
-
-    socket.on('connect', () => {
-      clearTimeout(connectTimer);
-      myId = socket.id;
-      console.log('[Socket] Connected, ID:', myId);
-      updateConnectionStatus('online');
-    });
-
-    socket.on('disconnect', () => {
-      updateConnectionStatus('offline');
-      showToast('Desconectado do servidor.');
-    });
-
-    socket.on('connect_error', () => {
-      if (!socket || !socket.connected) {
-        clearTimeout(connectTimer);
-        initP2PMode();
-      }
-    });
-
-    bindSocketEvents(socket);
-  } catch (err) {
-    initP2PMode();
-  }
-}
-
-function initP2PMode() {
-  if (socket && socket.isP2P) return;
-  console.log('[Network] Activating Serverless P2P WebRTC for Vercel!');
-  updateConnectionStatus('connecting', 'Ativando P2P...');
-
-  const p2p = new P2PNetworkAdapter();
-  p2p.init(() => {
-    myId = p2p.id;
-    updateConnectionStatus('online');
-    console.log('[Network] P2P WebRTC Online!');
-  });
-
-  socket = p2p;
-  bindSocketEvents(socket);
-}
-
-function bindSocketEvents(s) {
-  // Room Events
-  s.on('room_created', (room) => {
-    handleRoomJoined(room);
-    showToast('Sala criada com sucesso!');
-  });
-
-  s.on('room_joined', (room) => {
-    handleRoomJoined(room);
-    showToast(`Você entrou na sala ${room.code}!`);
-  });
-
-  s.on('room_player_joined', ({ player, room }) => {
-    currentRoom = room;
-    renderLobby(room);
-    showToast(`${player.avatar} ${player.nickname} entrou na sala!`);
-    if (window.soundEngine) window.soundEngine.playPop();
-  });
-
-  s.on('room_player_left', ({ room }) => {
-    currentRoom = room;
-    renderLobby(room);
-  });
-
-  s.on('game_selected', ({ selectedGame, room }) => {
-    currentRoom = room;
-    renderGameCards(selectedGame);
-    showToast('Jogo alterado pelo líder!');
-    if (window.soundEngine) window.soundEngine.playClick();
-  });
-
-  s.on('settings_updated', ({ settings }) => {
-    if (currentRoom) currentRoom.settings = settings;
-    updateSettingsDisplay(settings);
-  });
-
-  s.on('room_returned_to_lobby', (room) => {
-    currentRoom = room;
-    showScreen('lobby');
-    renderLobby(room);
-    showToast('Retornaram ao Lobby!');
-  });
-
-  s.on('error_message', (msg) => {
-    showToast(msg);
-  });
-
-  // Global Timer Tick
-  s.on('game_timer_tick', ({ timeLeft }) => {
-    const timerDisplay = document.getElementById('game-timer-display');
-    const timerVal = document.getElementById('game-timer-val');
-    if (timerVal) timerVal.textContent = timeLeft;
-    if (timerDisplay) {
-      if (timeLeft <= 5) {
-        timerDisplay.classList.add('warning');
-        if (window.soundEngine && timeLeft > 0) window.soundEngine.playTick();
-      } else {
-        timerDisplay.classList.remove('warning');
-      }
-    }
-  });
-
-  // Emojis & Reactions
-  s.on('player_reaction', ({ emoji, nickname, avatar }) => {
-    spawnFloatingReaction(emoji);
-    if (window.soundEngine) window.soundEngine.playPop();
-  });
-
-  // GAME 1: NÃO RESPONDA
-  s.on('game_round_start', (data) => {
-    showScreen('game');
-    renderNaoRespondaRound(data);
-  });
-
-  s.on('game_answered_update', ({ answeredCount, totalPlayers }) => {
-    const countEl = document.getElementById('nr-answered-count');
-    const totalEl = document.getElementById('nr-total-count');
-    if (countEl) countEl.textContent = answeredCount;
-    if (totalEl) totalEl.textContent = totalPlayers;
-  });
-
-  s.on('game_round_result', (data) => {
-    renderNaoRespondaResults(data);
-  });
-
-  // GAME 2: 3 DICAS
-  s.on('tres_dicas_clue', (data) => {
-    showScreen('game');
-    renderTresDicasClue(data);
-  });
-
-  s.on('tres_dicas_wrong_guess', ({ player, guess }) => {
-    const fb = document.getElementById('td-guess-feedback');
-    if (fb) {
-      fb.innerHTML = `<span style="color: var(--rose-glow);">${player.avatar} ${player.nickname} chutou: "<b>${guess}</b>" (Incorreto!)</span>`;
-    }
-  });
-
-  s.on('tres_dicas_round_result', (data) => {
-    renderTresDicasResult(data);
-  });
-
-  // GAME 3: JOGO DA SENHA
-  s.on('senha_round_start', (data) => {
-    showScreen('game');
-    renderSenhaRound(data);
-  });
-
-  s.on('senha_guess_feedback', (data) => {
-    renderSenhaFeedback(data);
-  });
-
-  s.on('senha_activity', ({ player, attemptsCount }) => {
-    showToast(`${player.avatar} ${player.nickname} fez uma tentativa (${attemptsCount}/8)`);
-  });
-
-  s.on('senha_round_result', (data) => {
-    renderSenhaResult(data);
-  });
-
-  // GAME 4: BOTÃO RÁPIDO
-  s.on('botao_round_start', (data) => {
-    showScreen('game');
-    renderBotaoRound(data);
-  });
-
-  s.on('botao_buzzed', (data) => {
-    handleBotaoBuzzed(data);
-  });
-
-  s.on('botao_player_failed', ({ player, reason }) => {
-    if (player) {
-      showToast(`${player.avatar} ${player.nickname} errou! (${reason})`);
-    }
-    if (window.soundEngine) window.soundEngine.playBuzzer();
-  });
-
-  s.on('botao_reopened', ({ questionTimeLeft, lockedOutIds }) => {
-    handleBotaoReopened(lockedOutIds);
-  });
-
-  s.on('botao_round_result', (data) => {
-    renderBotaoResult(data);
-  });
-
-  // PODIUM
-  s.on('game_podium', (data) => {
-    renderPodium(data);
-  });
-}
-
-// Room Joined Handler
-function handleRoomJoined(room) {
-  currentRoom = room;
-  isHost = room.hostId === socket.id;
-  showScreen('lobby');
-  renderLobby(room);
-
-  // Update URL without page reload
-  const newUrl = `${window.location.origin}${window.location.pathname}?sala=${room.code}`;
-  window.history.pushState({ path: newUrl }, '', newUrl);
-}
-
-// Render Room Lobby
-function renderLobby(room) {
-  document.getElementById('lobby-room-code').textContent = room.code;
-  document.getElementById('lobby-player-count').textContent = room.players.length;
-
-  isHost = room.hostId === socket.id;
-  const hostIndicator = document.getElementById('lobby-host-indicator');
-  const startBtn = document.getElementById('btn-start-game');
-  const pickerHint = document.getElementById('lobby-game-picker-hint');
-
-  if (isHost) {
-    hostIndicator.textContent = '👑 Você é o Líder da Sala';
-    startBtn.style.display = 'block';
-    startBtn.textContent = '🚀 INICIAR JOGO';
-    pickerHint.textContent = 'Você é o líder: clique em um jogo para selecionar';
-  } else {
-    hostIndicator.textContent = 'Aguardando o Líder iniciar...';
-    startBtn.style.display = 'none';
-    pickerHint.textContent = 'Aguardando líder escolher o jogo';
+  function setStatus(kind, text) {
+    const dot = $('server-status-dot');
+    const txt = $('server-status-text');
+    const color = { online: 'var(--acid-lime)', wait: 'var(--solar-yellow)', off: 'var(--punch-pink)' }[kind];
+    dot.style.background = color;
+    dot.style.boxShadow = `0 0 8px ${color}`;
+    txt.style.color = color;
+    txt.textContent = text;
   }
 
-  // Render Players
-  const listEl = document.getElementById('lobby-player-list');
-  listEl.innerHTML = '';
-  room.players.forEach(p => {
-    const pill = document.createElement('div');
-    pill.className = 'player-pill';
-    pill.innerHTML = `
-      <div class="left-info">
-        <span class="avatar">${p.avatar}</span>
-        <span style="font-weight: 700;">${p.nickname} ${p.id === socket.id ? '(Você)' : ''}</span>
-      </div>
-      <div>
-        ${p.isHost ? '<span class="host-crown">👑 Líder</span>' : '<span style="color: var(--emerald-glow); font-size: 0.85rem;">Pronto</span>'}
-      </div>
-    `;
-    listEl.appendChild(pill);
-  });
+  function sound(name) {
+    const se = window.soundEngine;
+    if (!se) return;
+    const map = { pop: 'playPop', click: 'playClick', success: 'playSuccess', buzzer: 'playBuzzer', tick: 'playTick', victory: 'playVictory', boom: 'playBuzzer' };
+    if (map[name] && se[map[name]]) se[map[name]]();
+  }
 
-  renderGameCards(room.selectedGame);
-  updateSettingsDisplay(room.settings);
-}
+  const isHost = () => S.room && S.me.id === S.room.hostId;
 
-// Render Game Select Cards
-function renderGameCards(selectedGameId) {
-  const cards = document.querySelectorAll('.game-select-card');
-  cards.forEach(card => {
-    const gameId = card.getAttribute('data-game-id');
-    if (gameId === selectedGameId) {
-      card.classList.add('selected');
-    } else {
-      card.classList.remove('selected');
-    }
+  // ---------------- rede ----------------
+  function send(msg) {
+    if (S.host) S.host.handle(S.me.id, msg);
+    else if (S.net) S.net.toHost(msg);
+  }
 
-    // Only host can click to select
-    card.onclick = () => {
-      if (!isHost) {
-        showToast('Apenas o líder da sala pode escolher o jogo!');
+  async function createRoom() {
+    const btn = $('btn-create-room');
+    btn.disabled = true;
+    btn.textContent = '⏳ Criando sala…';
+    setStatus('wait', 'Conectando…');
+    for (let attempt = 0; attempt < 4; attempt++) {
+      const code = U.roomCode();
+      const net = new Net();
+      try {
+        const id = await net.host(code);
+        S.net = net;
+        S.me.id = id;
+        S.host = new HostEngine(api, net, code, S.me);
+        setStatus('online', 'ONLINE');
+        S.host.pushRoom();
+        S.host.systemChat('Sala criada. Copie o link e chame a galera!');
         return;
+      } catch (err) {
+        if (err && err.type === 'unavailable-id') continue;
+        console.error(err);
+        toast('Não foi possível criar a sala: ' + (err.type || err.message));
+        break;
       }
-      socket.emit('select_game', { gameId });
-    };
-  });
-}
-
-function updateSettingsDisplay(settings) {
-  const roundsSel = document.getElementById('setting-rounds');
-  const timerSel = document.getElementById('setting-timer');
-  const diffSel = document.getElementById('setting-difficulty');
-
-  if (roundsSel && settings.rounds) roundsSel.value = settings.rounds;
-  if (timerSel && settings.timerSeconds) timerSel.value = settings.timerSeconds;
-  if (diffSel && settings.difficulty) diffSel.value = settings.difficulty;
-
-  // Disable dropdowns for non-hosts
-  [roundsSel, timerSel, diffSel].forEach(el => {
-    if (el) el.disabled = !isHost;
-  });
-}
-
-// Update Live Scoreboard
-function updateLiveScoreboard(scores) {
-  const bar = document.getElementById('game-live-scoreboard');
-  if (!bar || !scores) return;
-  bar.innerHTML = '';
-  scores.forEach(s => {
-    const chip = document.createElement('div');
-    chip.className = 'chip-answer';
-    chip.innerHTML = `
-      <span>${s.avatar}</span>
-      <span style="font-weight: 800;">${s.nickname}:</span>
-      <span style="color: var(--solar-yellow); font-family: var(--font-mono); font-weight: 900;">${s.score} pts</span>
-    `;
-    bar.appendChild(chip);
-  });
-}
-
-// -------------------------------------------------------------
-// JOGO 1: NÃO RESPONDA A MESMA RESPOSTA
-// -------------------------------------------------------------
-function renderNaoRespondaRound(data) {
-  switchGameView('view-nao-responda');
-  document.getElementById('game-active-title').textContent = '💡 Não Responda Igual';
-  document.getElementById('game-round-counter').textContent = `Rodada ${data.round} de ${data.totalRounds}`;
-  document.getElementById('nr-question-text').textContent = data.question;
-
-  // Answering controls
-  document.getElementById('nr-answering-box').style.display = 'block';
-  document.getElementById('nr-results-box').style.display = 'none';
-
-  const inputAnswer = document.getElementById('input-nr-answer');
-  const btnSubmit = document.getElementById('btn-nr-submit');
-  inputAnswer.value = '';
-  inputAnswer.disabled = false;
-  btnSubmit.disabled = false;
-  btnSubmit.textContent = 'Enviar ➔';
-  inputAnswer.focus();
-
-  document.getElementById('nr-answered-count').textContent = '0';
-  document.getElementById('nr-total-count').textContent = Object.keys(data.scores || {}).length || currentRoom.players.length;
-
-  updateLiveScoreboard(data.scores);
-  if (window.soundEngine) window.soundEngine.playPop();
-}
-
-function renderNaoRespondaResults(data) {
-  document.getElementById('nr-answering-box').style.display = 'none';
-  const resultsBox = document.getElementById('nr-results-box');
-  resultsBox.style.display = 'flex';
-
-  const uniquesList = document.getElementById('nr-uniques-list');
-  const duplicatesList = document.getElementById('nr-duplicates-list');
-  const noAnswersList = document.getElementById('nr-noanswers-list');
-
-  uniquesList.innerHTML = '';
-  duplicatesList.innerHTML = '';
-  noAnswersList.innerHTML = '';
-
-  // Uniques (+10 pts)
-  if (data.results.uniques.length === 0) {
-    uniquesList.innerHTML = '<span style="color: var(--text-secondary); font-size: 0.95rem;">Ninguém conseguiu resposta única nesta rodada!</span>';
-  } else {
-    data.results.uniques.forEach(item => {
-      const chip = document.createElement('div');
-      chip.className = 'chip-answer';
-      chip.style.border = '2px solid #000';
-      chip.style.boxShadow = '3px 3px 0 var(--acid-lime)';
-      chip.innerHTML = `
-        <span>${item.player.avatar} <b>${item.player.nickname}</b>:</span>
-        <span style="color: var(--acid-lime); font-family: var(--font-display); font-size: 1.15rem;">"${item.rawAnswer}"</span>
-        <span class="badge" style="background: var(--acid-lime); color: #000; font-weight: 900; border: 1.5px solid #000; padding: 2px 8px; border-radius: 6px;">+10 PTS</span>
-      `;
-      uniquesList.appendChild(chip);
-    });
-  }
-
-  // Duplicates (+5 pts)
-  if (data.results.duplicates.length === 0) {
-    duplicatesList.innerHTML = '<span style="color: var(--text-secondary); font-size: 0.95rem;">Nenhuma resposta foi repetida!</span>';
-  } else {
-    data.results.duplicates.forEach(grp => {
-      const chip = document.createElement('div');
-      chip.className = 'chip-answer';
-      chip.style.border = '2px solid #000';
-      chip.style.boxShadow = '3px 3px 0 var(--solar-yellow)';
-      const names = grp.players.map(p => `${p.avatar} ${p.nickname}`).join(' e ');
-      chip.innerHTML = `
-        <span style="color: var(--solar-yellow); font-family: var(--font-display); font-size: 1.15rem;">"${grp.sampleAnswer}"</span>
-        <span style="color: var(--text-secondary); font-size: 0.85rem;">(pensaram igual: ${names})</span>
-        <span class="badge" style="background: var(--solar-yellow); color: #000; font-weight: 900; border: 1.5px solid #000; padding: 2px 8px; border-radius: 6px;">+5 PTS</span>
-      `;
-      duplicatesList.appendChild(chip);
-    });
-  }
-
-  // No answers (0 pts)
-  if (data.results.noAnswers.length === 0) {
-    noAnswersList.innerHTML = '<span style="color: var(--text-secondary); font-size: 0.95rem;">Todos responderam a tempo! 🎉</span>';
-  } else {
-    data.results.noAnswers.forEach(item => {
-      const chip = document.createElement('div');
-      chip.className = 'chip-answer';
-      chip.style.border = '2px solid #000';
-      chip.style.boxShadow = '3px 3px 0 var(--punch-pink)';
-      chip.innerHTML = `
-        <span>${item.player.avatar} <b>${item.player.nickname}</b>:</span>
-        <span style="color: var(--punch-pink); font-style: italic;">${item.rawAnswer}</span>
-        <span class="badge" style="background: var(--punch-pink); color: #fff; font-weight: 900; border: 1.5px solid #000; padding: 2px 8px; border-radius: 6px;">0 PTS</span>
-      `;
-      noAnswersList.appendChild(chip);
-    });
-  }
-
-  updateLiveScoreboard(data.scores);
-  if (window.soundEngine) window.soundEngine.playSuccess();
-}
-
-// -------------------------------------------------------------
-// JOGO 2: JOGO DAS 3 DICAS
-// -------------------------------------------------------------
-function renderTresDicasClue(data) {
-  switchGameView('view-tres-dicas');
-  document.getElementById('game-active-title').textContent = '🔍 Jogo das 3 Dicas';
-  document.getElementById('game-round-counter').textContent = `Rodada ${data.round} de ${data.totalRounds}`;
-  document.getElementById('td-points-badge').textContent = `Acerto agora vale ${data.pointsAvailable} Pontos!`;
-
-  document.getElementById('td-input-box').style.display = 'block';
-  document.getElementById('td-result-box').style.display = 'none';
-
-  const container = document.getElementById('td-clues-container');
-  container.innerHTML = '';
-
-  data.clues.forEach((clueText, idx) => {
-    const card = document.createElement('div');
-    card.className = 'glass-panel';
-    card.style.padding = '16px';
-    card.style.display = 'flex';
-    card.style.alignItems = 'center';
-    card.style.gap = '14px';
-    card.innerHTML = `
-      <span class="badge badge-cyan" style="font-size: 1rem; padding: 6px 12px;">Dica ${idx + 1}</span>
-      <span style="font-size: 1.15rem; font-weight: 700; color: #fff;">${clueText}</span>
-    `;
-    container.appendChild(card);
-  });
-
-  const inputGuess = document.getElementById('input-td-guess');
-  inputGuess.value = '';
-  inputGuess.focus();
-  document.getElementById('td-guess-feedback').textContent = '';
-
-  updateLiveScoreboard(data.scores);
-  if (window.soundEngine) window.soundEngine.playPop();
-}
-
-function renderTresDicasResult(data) {
-  document.getElementById('td-input-box').style.display = 'none';
-  const resultBox = document.getElementById('td-result-box');
-  resultBox.style.display = 'block';
-
-  const winnerEl = document.getElementById('td-winner-text');
-  const secretEl = document.getElementById('td-secret-reveal');
-
-  if (data.winner) {
-    winnerEl.innerHTML = `🎉 ${data.winner.player.avatar} <b>${data.winner.player.nickname}</b> acertou com palpite "${data.winner.guess}" (+${data.winner.points} pts)!`;
-    winnerEl.style.color = 'var(--emerald-glow)';
-    if (window.soundEngine) window.soundEngine.playSuccess();
-  } else {
-    winnerEl.innerHTML = `⏳ Ninguém adivinhou a tempo!`;
-    winnerEl.style.color = 'var(--amber-glow)';
-    if (window.soundEngine) window.soundEngine.playBuzzer();
-  }
-
-  secretEl.innerHTML = `A resposta certa era: <b style="color: var(--cyan-glow); font-size: 1.4rem;">${data.answer}</b>`;
-  updateLiveScoreboard(data.scores);
-}
-
-// -------------------------------------------------------------
-// JOGO 3: JOGO DA SENHA
-// -------------------------------------------------------------
-function renderSenhaRound(data) {
-  switchGameView('view-jogo-senha');
-  document.getElementById('game-active-title').textContent = '🔐 Jogo da Senha';
-  document.getElementById('game-round-counter').textContent = `Rodada ${data.round} de ${data.totalRounds}`;
-  
-  const modeLabel = document.getElementById('senha-mode-label');
-  if (data.mode === 'facil') {
-    modeLabel.textContent = 'Modo Fácil: Verde (lugar certo), Amarelo (existe no código), Vermelho (não existe).';
-  } else {
-    modeLabel.textContent = 'Modo Difícil: Apenas contagem de dígitos certos sem dizer as posições!';
-  }
-
-  document.getElementById('senha-attempts-history').innerHTML = '';
-  document.getElementById('senha-result-box').style.display = 'none';
-
-  const inputGuess = document.getElementById('input-senha-guess');
-  inputGuess.value = '';
-  inputGuess.disabled = false;
-  inputGuess.focus();
-  document.getElementById('btn-senha-submit').disabled = false;
-
-  updateLiveScoreboard(data.scores);
-  if (window.soundEngine) window.soundEngine.playPop();
-}
-
-function renderSenhaFeedback(data) {
-  const history = document.getElementById('senha-attempts-history');
-  const row = document.createElement('div');
-  row.style.display = 'flex';
-  row.style.alignItems = 'center';
-  row.style.justifyContent = 'space-between';
-  row.style.padding = '8px 12px';
-  row.style.background = 'rgba(0,0,0,0.3)';
-  row.style.borderRadius = 'var(--radius-sm)';
-  row.style.border = '1px solid var(--bg-card-border)';
-
-  const attempt = data.attempt;
-
-  if (attempt.feedback) {
-    // Easy mode chips
-    let boxesHtml = '<div style="display: flex; gap: 6px;">';
-    attempt.feedback.forEach(f => {
-      boxesHtml += `<span class="code-digit-box ${f.status}" style="width: 38px; height: 44px; font-size: 1.3rem;">${f.digit}</span>`;
-    });
-    boxesHtml += '</div>';
-
-    row.innerHTML = `
-      <span style="color: var(--text-muted); font-size: 0.85rem;">#${data.attemptsCount}</span>
-      ${boxesHtml}
-      <span style="font-size: 0.85rem; color: ${attempt.isCorrect ? 'var(--emerald-glow)' : 'var(--text-muted)'};">${attempt.isCorrect ? 'ACERTOU! 🏆' : 'Tente novamente'}</span>
-    `;
-  } else if (attempt.hardFeedback) {
-    // Hard mode
-    row.innerHTML = `
-      <span style="color: var(--text-muted); font-size: 0.85rem;">#${data.attemptsCount}</span>
-      <span style="font-family: 'JetBrains Mono', monospace; font-size: 1.2rem; font-weight: 800; letter-spacing: 4px;">${attempt.guess}</span>
-      <span style="font-size: 0.85rem; color: var(--amber-glow);">
-        🎯 ${attempt.hardFeedback.exactMatches} na posição | 🔄 ${attempt.hardFeedback.existingMatches} no código
-      </span>
-    `;
-  }
-
-  history.prepend(row);
-  if (window.soundEngine) {
-    if (attempt.isCorrect) window.soundEngine.playSuccess();
-    else window.soundEngine.playClick();
-  }
-}
-
-function renderSenhaResult(data) {
-  const resultBox = document.getElementById('senha-result-box');
-  resultBox.style.display = 'block';
-
-  const winnerEl = document.getElementById('senha-winner-text');
-  const codeEl = document.getElementById('senha-code-reveal');
-
-  if (data.winner) {
-    winnerEl.innerHTML = `🏆 ${data.winner.player.avatar} <b>${data.winner.player.nickname}</b> quebrou a senha em ${data.winner.attempts} tentativas (+${data.winner.points} pts)!`;
-    if (window.soundEngine) window.soundEngine.playSuccess();
-  } else {
-    winnerEl.innerHTML = `Ninguém descobriu a senha a tempo!`;
-    if (window.soundEngine) window.soundEngine.playBuzzer();
-  }
-
-  codeEl.textContent = `A senha secreta era: [ ${data.secretCode} ]`;
-  updateLiveScoreboard(data.scores);
-}
-
-// -------------------------------------------------------------
-// JOGO 4: BOTÃO RÁPIDO (TORTA NA CARA)
-// -------------------------------------------------------------
-function renderBotaoRound(data) {
-  switchGameView('view-botao-rapido');
-  document.getElementById('game-active-title').textContent = '🚨 Botão Rápido';
-  document.getElementById('game-round-counter').textContent = `Rodada ${data.round} de ${data.totalRounds}`;
-  document.getElementById('br-question-text').textContent = data.question;
-
-  document.getElementById('br-buzzer-wrapper').style.display = 'flex';
-  document.getElementById('br-options-container').style.display = 'none';
-  document.getElementById('br-round-result').style.display = 'none';
-
-  const buzzerBtn = document.getElementById('btn-giant-buzzer');
-  buzzerBtn.disabled = false;
-  document.getElementById('br-buzzer-status').textContent = 'Seja o primeiro a bater no botão!';
-
-  // Populate options
-  const optionBtns = document.querySelectorAll('.br-option-btn');
-  optionBtns.forEach((btn, idx) => {
-    btn.textContent = data.options[idx] || '';
+    }
+    setStatus('off', 'Offline');
     btn.disabled = false;
-    btn.style.borderColor = 'var(--bg-card-border)';
-  });
-
-  updateLiveScoreboard(data.scores);
-  if (window.soundEngine) window.soundEngine.playPop();
-}
-
-function handleBotaoBuzzed(data) {
-  if (window.soundEngine) window.soundEngine.playBuzzer();
-
-  const isMe = data.player.id === socket.id;
-  const statusEl = document.getElementById('br-buzzer-status');
-  const buzzerBtn = document.getElementById('btn-giant-buzzer');
-  buzzerBtn.disabled = true;
-
-  if (isMe) {
-    statusEl.innerHTML = `<span style="color: var(--emerald-glow);">VOCÊ BATEU PRIMEIRO! Escolha a resposta rápida! (${data.buzzerTimeLeft}s)</span>`;
-    document.getElementById('br-options-container').style.display = 'grid';
-  } else {
-    statusEl.innerHTML = `<span style="color: var(--amber-glow);">${data.player.avatar} <b>${data.player.nickname}</b> bateu no botão! Aguardando resposta...</span>`;
-    document.getElementById('br-options-container').style.display = 'none';
-  }
-}
-
-function handleBotaoReopened(lockedOutIds) {
-  const isLocked = lockedOutIds.includes(socket.id);
-  const buzzerBtn = document.getElementById('btn-giant-buzzer');
-  const statusEl = document.getElementById('br-buzzer-status');
-
-  document.getElementById('br-options-container').style.display = 'none';
-
-  if (isLocked) {
-    buzzerBtn.disabled = true;
-    statusEl.innerHTML = `<span style="color: var(--rose-glow);">Você errou nesta rodada! Bloqueado.</span>`;
-  } else {
-    buzzerBtn.disabled = false;
-    statusEl.innerHTML = `<span style="color: var(--cyan-glow);">Botão liberado novamente! BATA AGORA!</span>`;
-  }
-}
-
-function renderBotaoResult(data) {
-  document.getElementById('br-buzzer-wrapper').style.display = 'none';
-  document.getElementById('br-options-container').style.display = 'none';
-
-  const resultBox = document.getElementById('br-round-result');
-  resultBox.style.display = 'block';
-
-  const msgEl = document.getElementById('br-round-winner-msg');
-  if (data.winner) {
-    msgEl.innerHTML = `🎉 ${data.winner.player.avatar} <b>${data.winner.player.nickname}</b> acertou: "<b>${data.correctOption}</b>" (+10 pts)!`;
-    msgEl.style.color = 'var(--emerald-glow)';
-    if (window.soundEngine) window.soundEngine.playSuccess();
-  } else {
-    msgEl.innerHTML = `❌ Resposta certa era: "<b>${data.correctOption}</b>" (${data.reason})`;
-    msgEl.style.color = 'var(--rose-glow)';
+    btn.textContent = '✨ Criar Sala Privada';
   }
 
-  updateLiveScoreboard(data.scores);
-}
-
-// -------------------------------------------------------------
-// PODIUM & VENCEDORES
-// -------------------------------------------------------------
-function renderPodium(data) {
-  showScreen('podium');
-  if (window.soundEngine) window.soundEngine.playVictory();
-  triggerConfetti();
-
-  const podium = data.podium || [];
-  
-  // 1st place
-  const p1 = podium[0];
-  document.getElementById('podium-avatar-1').textContent = p1 ? p1.avatar : '👑';
-  document.getElementById('podium-name-1').textContent = p1 ? p1.nickname : '-';
-  document.getElementById('podium-score-1').textContent = p1 ? `${p1.score} pts` : '0 pts';
-
-  // 2nd place
-  const p2 = podium[1];
-  document.getElementById('podium-avatar-2').textContent = p2 ? p2.avatar : '🥈';
-  document.getElementById('podium-name-2').textContent = p2 ? p2.nickname : '-';
-  document.getElementById('podium-score-2').textContent = p2 ? `${p2.score} pts` : '0 pts';
-
-  // 3rd place
-  const p3 = podium[2];
-  document.getElementById('podium-avatar-3').textContent = p3 ? p3.avatar : '🥉';
-  document.getElementById('podium-name-3').textContent = p3 ? p3.nickname : '-';
-  document.getElementById('podium-score-3').textContent = p3 ? `${p3.score} pts` : '0 pts';
-
-  // Full list
-  const fullList = document.getElementById('podium-full-list');
-  fullList.innerHTML = '';
-  data.scores.forEach((p, idx) => {
-    const item = document.createElement('div');
-    item.className = 'player-pill';
-    item.innerHTML = `
-      <div class="left-info">
-        <span style="font-weight: 800; width: 24px;">#${idx + 1}</span>
-        <span class="avatar">${p.avatar}</span>
-        <span style="font-weight: 700;">${p.nickname}</span>
-      </div>
-      <div style="font-weight: 800; color: var(--cyan-glow);">${p.score} pts</div>
-    `;
-    fullList.appendChild(item);
-  });
-
-  // Action buttons
-  const playAgainBtn = document.getElementById('btn-play-again');
-  if (playAgainBtn) {
-    playAgainBtn.style.display = isHost ? 'inline-flex' : 'none';
-  }
-}
-
-// Helper: Switch Active Game View
-function switchGameView(viewId) {
-  document.querySelectorAll('.game-view').forEach(v => v.style.display = 'none');
-  const target = document.getElementById(viewId);
-  if (target) target.style.display = 'block';
-}
-
-// Spawn Floating Reaction Emoji
-function spawnFloatingReaction(emoji) {
-  const el = document.createElement('div');
-  el.className = 'floating-reaction';
-  el.textContent = emoji;
-  el.style.left = `${Math.random() * 60 + 20}%`;
-  document.body.appendChild(el);
-  setTimeout(() => el.remove(), 2500);
-}
-
-// Confetti Effect
-function triggerConfetti() {
-  const canvas = document.getElementById('confetti-canvas');
-  if (!canvas) return;
-  const ctx = canvas.getContext('2d');
-  canvas.width = window.innerWidth;
-  canvas.height = window.innerHeight;
-
-  const particles = [];
-  const colors = ['#ff0080', '#7928ca', '#00f0ff', '#10b981', '#f59e0b', '#ffffff'];
-
-  for (let i = 0; i < 120; i++) {
-    particles.push({
-      x: canvas.width / 2,
-      y: canvas.height / 2,
-      vx: (Math.random() - 0.5) * 18,
-      vy: (Math.random() - 0.8) * 18,
-      size: Math.random() * 8 + 4,
-      color: colors[Math.floor(Math.random() * colors.length)],
-      gravity: 0.4,
-      rotation: Math.random() * 360,
-      rotationSpeed: (Math.random() - 0.5) * 10
+  async function joinRoom() {
+    const code = $('input-room-code').value.trim().toUpperCase();
+    if (code.length !== 4) { toast('O código da sala tem 4 letras.'); return; }
+    const btn = $('btn-join-room');
+    btn.disabled = true;
+    btn.textContent = '⏳';
+    setStatus('wait', 'Conectando…');
+    const net = new Net();
+    net.on('msg', (_from, msg) => receive(msg));
+    net.on('hostLost', () => {
+      setStatus('off', 'Sala encerrada');
+      toast('O anfitrião saiu. A sala foi encerrada.');
+      setTimeout(() => { window.location.href = window.location.pathname; }, 3500);
     });
-  }
-
-  let animationFrame;
-  function update() {
-    ctx.clearRect(0, 0, canvas.width, canvas.height);
-    let alive = false;
-    particles.forEach(p => {
-      p.vy += p.gravity;
-      p.x += p.vx;
-      p.y += p.vy;
-      p.rotation += p.rotationSpeed;
-
-      if (p.y < canvas.height) alive = true;
-
-      ctx.save();
-      ctx.translate(p.x, p.y);
-      ctx.rotate((p.rotation * Math.PI) / 180);
-      ctx.fillStyle = p.color;
-      ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
-      ctx.restore();
-    });
-
-    if (alive) {
-      animationFrame = requestAnimationFrame(update);
-    } else {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
+    try {
+      S.me.id = await net.join(code);
+      S.net = net;
+      setStatus('online', 'ONLINE');
+      net.toHost({ t: 'join', nickname: S.me.nickname, avatar: S.me.avatar });
+    } catch (err) {
+      net.destroy();
+      setStatus('off', 'Offline');
+      toast(err.message);
+      btn.disabled = false;
+      btn.textContent = 'Entrar ➔';
     }
   }
-  update();
-}
 
-// -------------------------------------------------------------
-// EVENT LISTENERS
-// -------------------------------------------------------------
-function startApp() {
-  initApp();
-
-  // Create Room
-  const btnCreate = document.getElementById('btn-create-room');
-  if (btnCreate) {
-    btnCreate.addEventListener('click', () => {
-      const nickInput = document.getElementById('input-nickname');
-      const nick = (nickInput ? nickInput.value.trim() : '') || currentUser.nickname || 'Jogador 1';
-      currentUser.nickname = nick;
-      localStorage.setItem('x_nickname', nick);
-
-      if (!socket || !socket.connected) {
-        showToast('Servidor acordando no Render... Conectando na sala em instantes!');
-        btnCreate.disabled = true;
-        btnCreate.innerHTML = '<span>⏳</span> Conectando...';
-
-        socket.once('connect', () => {
-          btnCreate.innerHTML = '<span>⏳</span> Criando Sala...';
-          socket.emit('create_room', {
-            nickname: nick,
-            avatar: currentUser.avatar
-          }, (res) => {
-            btnCreate.disabled = false;
-            btnCreate.innerHTML = '<span>✨</span> Criar Sala Privada';
-            if (res && res.success) {
-              handleRoomJoined(res.room);
-            }
-          });
-        });
-
-        setTimeout(() => {
-          btnCreate.disabled = false;
-          btnCreate.innerHTML = '<span>✨</span> Criar Sala Privada';
-        }, 8000);
-        return;
-      }
-
-      btnCreate.disabled = true;
-      btnCreate.innerHTML = '<span>⏳</span> Criando Sala...';
-
-      socket.emit('create_room', {
-        nickname: nick,
-        avatar: currentUser.avatar
-      }, (res) => {
-        btnCreate.disabled = false;
-        btnCreate.innerHTML = '<span>✨</span> Criar Sala Privada';
-        if (res && res.success) {
-          handleRoomJoined(res.room);
-        } else if (res && res.error) {
-          showToast(res.error);
-        }
-      });
-
-      setTimeout(() => {
-        btnCreate.disabled = false;
-        btnCreate.innerHTML = '<span>✨</span> Criar Sala Privada';
-      }, 5000);
-    });
-  }
-
-  // Join Room
-  const btnJoin = document.getElementById('btn-join-room');
-  if (btnJoin) {
-    btnJoin.addEventListener('click', () => {
-      const codeInput = document.getElementById('input-room-code');
-      const code = (codeInput ? codeInput.value.trim() : '');
-      if (!code) {
-        showToast('Digite o código de 4 letras da sala!');
-        return;
-      }
-      const nickInput = document.getElementById('input-nickname');
-      const nick = (nickInput ? nickInput.value.trim() : '') || currentUser.nickname || 'Jogador';
-      currentUser.nickname = nick;
-      localStorage.setItem('x_nickname', nick);
-
-      btnJoin.disabled = true;
-      btnJoin.textContent = 'Entrando...';
-
-      socket.emit('join_room', {
-        code,
-        nickname: nick,
-        avatar: currentUser.avatar
-      }, (res) => {
-        btnJoin.disabled = false;
-        btnJoin.textContent = 'Entrar ➔';
-        if (res && res.success) {
-          handleRoomJoined(res.room);
-        } else if (res && res.error) {
-          showToast(res.error);
-        }
-      });
-
-      setTimeout(() => {
-        btnJoin.disabled = false;
-        btnJoin.textContent = 'Entrar ➔';
-      }, 5000);
-    });
-  }
-
-  // Copy Code
-  document.getElementById('btn-copy-code').addEventListener('click', () => {
-    if (!currentRoom) return;
-    navigator.clipboard.writeText(currentRoom.code).then(() => {
-      showToast(`Código ${currentRoom.code} copiado!`);
-    });
-  });
-
-  // Copy Invite Link
-  document.getElementById('btn-copy-link').addEventListener('click', () => {
-    if (!currentRoom) return;
-    const link = `${window.location.origin}/?sala=${currentRoom.code}`;
-    navigator.clipboard.writeText(link).then(() => {
-      showToast('Link de convite copiado! Envie no WhatsApp ou Discord 🚀');
-    });
-  });
-
-  // Host Change Settings
-  const settingRounds = document.getElementById('setting-rounds');
-  const settingTimer = document.getElementById('setting-timer');
-  const settingDiff = document.getElementById('setting-difficulty');
-
-  [settingRounds, settingTimer, settingDiff].forEach(el => {
-    el.addEventListener('change', () => {
-      if (!isHost) return;
-      socket.emit('update_settings', {
-        rounds: settingRounds.value,
-        timerSeconds: settingTimer.value,
-        difficulty: settingDiff.value
-      });
-    });
-  });
-
-  // Host Start Game
-  document.getElementById('btn-start-game').addEventListener('click', () => {
-    if (!isHost) return;
-    socket.emit('start_game');
-  });
-
-  // Jogo 1 (Não Responda): Submit Answer
-  const inputNrAnswer = document.getElementById('input-nr-answer');
-  const btnNrSubmit = document.getElementById('btn-nr-submit');
-
-  function submitNrAnswer() {
-    const val = inputNrAnswer.value.trim();
-    if (!val) {
-      showToast('Digite uma resposta antes de enviar!');
-      return;
+  // ---------------- mensagens do anfitrião ----------------
+  function receive(msg) {
+    if (!msg) return;
+    switch (msg.t) {
+      case 'room': onRoom(msg.room); break;
+      case 'view': onView(msg.v); break;
+      case 'chat': addChat(msg.m); break;
+      case 'chatlog': $('chat-log').innerHTML = ''; (msg.list || []).forEach((m) => addChat(m, true)); break;
+      case 'react': floatReaction(msg.emoji); sound('pop'); break;
+      case 'toast': toast(msg.text); break;
     }
-    socket.emit('submit_answer', { answer: val });
-    inputNrAnswer.disabled = true;
-    btnNrSubmit.disabled = true;
-    btnNrSubmit.textContent = 'Enviado! ✔';
-    showToast('Resposta enviada! Torça para ninguém responder igual.');
-    if (window.soundEngine) window.soundEngine.playPop();
   }
 
-  btnNrSubmit.addEventListener('click', submitNrAnswer);
-  inputNrAnswer.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') submitNrAnswer();
-  });
+  function onRoom(room) {
+    const prevPhase = S.room && S.room.phase;
+    S.room = room;
+    const url = `${location.pathname}?sala=${room.code}`;
+    if (location.search !== `?sala=${room.code}`) history.replaceState(null, '', url);
 
-  // Jogo 2 (3 Dicas): Submit Guess
-  const inputTdGuess = document.getElementById('input-td-guess');
-  const btnTdSubmit = document.getElementById('btn-td-submit');
-
-  function submitTdGuess() {
-    const val = inputTdGuess.value.trim();
-    if (!val) return;
-    socket.emit('submit_guess', { guess: val }, (res) => {
-      if (res && !res.success) {
-        showToast(res.message);
-      }
-    });
-    inputTdGuess.value = '';
-  }
-
-  btnTdSubmit.addEventListener('click', submitTdGuess);
-  inputTdGuess.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') submitTdGuess();
-  });
-
-  // Jogo 3 (Senha): Submit Guess
-  const inputSenhaGuess = document.getElementById('input-senha-guess');
-  const btnSenhaSubmit = document.getElementById('btn-senha-submit');
-
-  function submitSenhaGuess() {
-    const val = inputSenhaGuess.value.trim();
-    if (!/^\d{4}$/.test(val)) {
-      showToast('A senha precisa ter exatamente 4 números!');
-      return;
-    }
-    socket.emit('submit_guess', { guess: val }, (res) => {
-      if (res && !res.success) {
-        showToast(res.message);
-      }
-    });
-    inputSenhaGuess.value = '';
-    inputSenhaGuess.focus();
-  }
-
-  btnSenhaSubmit.addEventListener('click', submitSenhaGuess);
-  inputSenhaGuess.addEventListener('keydown', (e) => {
-    if (e.key === 'Enter') submitSenhaGuess();
-  });
-
-  // Jogo 4 (Botão Rápido): Buzzer press & Option selection
-  document.getElementById('btn-giant-buzzer').addEventListener('click', () => {
-    socket.emit('press_buzzer');
-  });
-
-  document.querySelectorAll('.br-option-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const idx = parseInt(e.currentTarget.getAttribute('data-index'));
-      socket.emit('submit_buzzer_answer', { optionIndex: idx });
-      document.querySelectorAll('.br-option-btn').forEach(b => b.disabled = true);
-    });
-  });
-
-  // Reactions buttons
-  document.querySelectorAll('.emoji-btn').forEach(btn => {
-    btn.addEventListener('click', (e) => {
-      const emoji = e.currentTarget.getAttribute('data-emoji');
-      socket.emit('send_reaction', { emoji });
-    });
-  });
-
-  // Podium Buttons
-  document.getElementById('btn-play-again').addEventListener('click', () => {
-    if (!isHost) return;
-    socket.emit('start_game');
-  });
-
-  document.getElementById('btn-back-lobby').addEventListener('click', () => {
-    if (isHost) {
-      socket.emit('return_to_lobby');
-    } else {
+    if (room.phase === 'lobby') {
       showScreen('lobby');
+      renderLobby();
+    } else if (room.phase === 'game') {
+      showScreen('game');
+      if (prevPhase !== 'game') { S.view = null; $('game-stage').innerHTML = '<div class="muted">Carregando…</div>'; }
+    } else if (room.phase === 'podium') {
+      showScreen('podium');
+      renderPodium();
     }
-  });
-
-  // Brand Logo Click
-  const logoBtn = document.getElementById('btn-logo-home');
-  if (logoBtn) {
-    logoBtn.addEventListener('click', () => {
-      if (confirm('Deseja voltar para a tela inicial?')) {
-        window.location.href = '/';
-      }
-    });
   }
-}
 
-// Safe Bootstrap: execute immediately if document is ready or on DOMContentLoaded
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', startApp);
-} else {
-  startApp();
-}
+  // ---------------- lobby ----------------
+  function renderLobby() {
+    const r = S.room;
+    $('lobby-room-code').textContent = r.code;
+    $('lobby-player-count').textContent = r.players.length;
+    $('lobby-host-indicator').textContent = isHost() ? '👑 Você é o líder da sala' : 'Aguardando o líder iniciar…';
+    $('btn-start-game').style.display = isHost() ? 'flex' : 'none';
+
+    $('lobby-player-list').innerHTML = r.players.map((p) => `
+      <div class="player-pill">
+        <div class="left-info"><span class="avatar">${esc(p.avatar)}</span>
+          <span style="font-weight:700">${esc(p.nickname)}${p.id === S.me.id ? ' (você)' : ''}</span></div>
+        ${p.id === r.hostId ? '<span class="host-crown">👑 Líder</span>' : '<span class="muted small">pronto</span>'}
+      </div>`).join('');
+
+    // filtros
+    $('lobby-filters').innerHTML = Object.entries(CATS).map(([k, label]) =>
+      `<button class="filter-chip ${S.filter === k ? 'active' : ''}" data-cat="${k}">${label}</button>`).join('');
+    $('lobby-filters').querySelectorAll('.filter-chip').forEach((b) => {
+      b.onclick = () => { S.filter = b.dataset.cat; renderLobby(); };
+    });
+
+    // cartuchos
+    const ids = GAME_ORDER.filter((id) => S.filter === 'all' || GAMES[id].cat === S.filter);
+    $('lobby-game-cards').innerHTML = ids.map((id) => {
+      const g = GAMES[id];
+      return `
+        <div class="game-select-card ${r.selectedGame === id ? 'selected' : ''}" data-id="${id}">
+          <div class="card-top"><span class="badge badge-${g.cat}">${CATS[g.cat]}</span>
+            <span class="muted small">👥 ${g.minPlayers}+</span></div>
+          <h4>${g.emoji} ${esc(g.name)}</h4>
+          <p class="muted small">${esc(g.desc)}</p>
+        </div>`;
+    }).join('');
+    $('lobby-game-cards').querySelectorAll('.game-select-card').forEach((c) => {
+      c.onclick = () => {
+        if (!isHost()) { toast('Só o líder escolhe o jogo.'); return; }
+        send({ t: 'lobby', op: 'select', gameId: c.dataset.id });
+        sound('click');
+      };
+    });
+
+    const sel = GAMES[r.selectedGame];
+    $('lobby-selected-name').textContent = sel ? `${sel.emoji} ${sel.name}` : '';
+    $('setting-rounds').value = r.settings.rounds;
+    $('setting-timer').value = r.settings.time;
+    $('setting-difficulty').value = r.settings.difficulty;
+    ['setting-rounds', 'setting-timer', 'setting-difficulty'].forEach((id) => { $(id).disabled = !isHost(); });
+  }
+
+  // ---------------- jogo ----------------
+  const gameApi = {
+    send: (type, data) => send({ t: 'action', type, data: data || {} }),
+    esc,
+    get me() { return S.me.id; },
+    sound
+  };
+
+  function onView(v) {
+    S.view = v;
+    if (!S.room || S.room.phase !== 'game') return;
+    const def = GAMES[S.room.gameId];
+    if (!def) return;
+
+    $('game-active-title').textContent = `${def.emoji} ${def.name}`;
+    $('game-round-counter').textContent = v.label || '';
+
+    // timer: converte "restante" em relógio local (evita diferença de relógio entre aparelhos)
+    if (v._timer) {
+      S.timerEnd = Date.now() + v._timer.left;
+      $('game-timer-display').style.visibility = 'visible';
+    } else {
+      S.timerEnd = 0;
+      $('game-timer-display').style.visibility = 'hidden';
+    }
+    if (v._cue && v._cue.id !== S.lastCue) { S.lastCue = v._cue.id; sound(v._cue.name); }
+
+    // re-renderiza preservando o que o jogador estava digitando
+    const stage = $('game-stage');
+    const saved = {};
+    stage.querySelectorAll('input[id], textarea[id]').forEach((i) => { saved[i.id] = i.value; });
+    const focused = document.activeElement && stage.contains(document.activeElement) ? document.activeElement.id : null;
+    const caret = focused ? document.activeElement.selectionStart : null;
+
+    try { def.render(stage, v, gameApi); } catch (e) { console.error('[render]', e); }
+
+    Object.entries(saved).forEach(([id, val]) => {
+      const el = document.getElementById(id);
+      if (el && stage.contains(el) && !el.dataset.fresh && !el.value) el.value = val;
+    });
+    if (focused) {
+      const el = document.getElementById(focused);
+      if (el && !el.disabled) { el.focus(); try { el.setSelectionRange(caret, caret); } catch (e) { /* ignore */ } }
+    } else {
+      const auto = stage.querySelector('[data-autofocus]');
+      if (auto && !auto.disabled && window.innerWidth > 700) auto.focus();
+    }
+
+    $('game-live-scoreboard').innerHTML = (v._scores || []).map((s) => `
+      <div class="chip ${s.connected ? '' : 'chip-off'}">${esc(s.avatar)} <b>${esc(s.nickname)}</b>
+        <span class="pts">${s.score}</span></div>`).join('');
+    $('btn-game-exit').style.display = isHost() ? 'inline-flex' : 'none';
+  }
+
+  function tickTimer() {
+    if (!S.timerEnd) return;
+    const left = Math.max(0, Math.ceil((S.timerEnd - Date.now()) / 1000));
+    $('game-timer-val').textContent = left;
+    const box = $('game-timer-display');
+    if (left <= 5) {
+      box.classList.add('warning');
+      if (left !== S.lastTick && left > 0) sound('tick');
+    } else {
+      box.classList.remove('warning');
+    }
+    S.lastTick = left;
+  }
+
+  // ---------------- pódio ----------------
+  function renderPodium() {
+    const sorted = S.room.players.slice().sort((a, b) => b.score - a.score);
+    [1, 2, 3].forEach((n) => {
+      const p = sorted[n - 1];
+      $(`podium-avatar-${n}`).textContent = p ? p.avatar : '—';
+      $(`podium-name-${n}`).textContent = p ? p.nickname : '-';
+      $(`podium-score-${n}`).textContent = p ? `${p.score} pts` : '';
+    });
+    $('podium-full-list').innerHTML = sorted.map((p, i) => `
+      <div class="player-pill"><div class="left-info"><b>#${i + 1}</b>
+        <span class="avatar">${esc(p.avatar)}</span><span style="font-weight:700">${esc(p.nickname)}</span></div>
+        <b class="pts">${p.score} pts</b></div>`).join('');
+    $('btn-play-again').style.display = isHost() ? 'inline-flex' : 'none';
+    $('btn-back-lobby').style.display = isHost() ? 'inline-flex' : 'none';
+    $('podium-wait').style.display = isHost() ? 'none' : 'block';
+    sound('victory');
+    confetti();
+  }
+
+  // ---------------- chat ----------------
+  function addChat(m, silent) {
+    const log = $('chat-log');
+    const div = document.createElement('div');
+    div.className = m.system ? 'chat-msg system' : 'chat-msg';
+    div.innerHTML = m.system
+      ? `<span>${esc(m.text)}</span>`
+      : `<span class="chat-who">${esc(m.avatar)} ${esc(m.nickname)}</span> <span>${esc(m.text)}</span> <span class="chat-time">${esc(m.time)}</span>`;
+    log.appendChild(div);
+    log.scrollTop = log.scrollHeight;
+    if (!silent && !S.chatOpen && !m.system) {
+      S.unread += 1;
+      $('chat-badge').textContent = S.unread;
+      $('chat-badge').style.display = 'flex';
+    }
+  }
+
+  function toggleChat(open) {
+    S.chatOpen = open == null ? !S.chatOpen : open;
+    $('chat-panel').classList.toggle('open', S.chatOpen);
+    if (S.chatOpen) {
+      S.unread = 0;
+      $('chat-badge').style.display = 'none';
+      setTimeout(() => $('chat-input').focus(), 50);
+    }
+  }
+
+  // ---------------- efeitos ----------------
+  function floatReaction(emoji) {
+    const el = document.createElement('div');
+    el.className = 'floating-reaction';
+    el.textContent = emoji;
+    el.style.left = `${Math.random() * 60 + 20}%`;
+    document.body.appendChild(el);
+    setTimeout(() => el.remove(), 2300);
+  }
+
+  function confetti() {
+    const canvas = $('confetti-canvas');
+    const ctx = canvas.getContext('2d');
+    canvas.width = innerWidth;
+    canvas.height = innerHeight;
+    const colors = ['#ccff00', '#ff1f6d', '#00f0ff', '#ffd000', '#ffffff'];
+    const parts = Array.from({ length: 140 }, () => ({
+      x: canvas.width / 2, y: canvas.height / 2,
+      vx: (Math.random() - 0.5) * 18, vy: (Math.random() - 0.85) * 18,
+      s: Math.random() * 8 + 4, c: colors[Math.floor(Math.random() * colors.length)],
+      r: Math.random() * 360, vr: (Math.random() - 0.5) * 12
+    }));
+    (function frame() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      let alive = false;
+      parts.forEach((p) => {
+        p.vy += 0.4; p.x += p.vx; p.y += p.vy; p.r += p.vr;
+        if (p.y < canvas.height) alive = true;
+        ctx.save(); ctx.translate(p.x, p.y); ctx.rotate(p.r * Math.PI / 180);
+        ctx.fillStyle = p.c; ctx.fillRect(-p.s / 2, -p.s / 2, p.s, p.s); ctx.restore();
+      });
+      if (alive) requestAnimationFrame(frame); else ctx.clearRect(0, 0, canvas.width, canvas.height);
+    })();
+  }
+
+  // ---------------- inicialização ----------------
+  const api = { receive };
+
+  function init() {
+    // limpa service workers antigos (projeto anterior na mesma porta)
+    if ('serviceWorker' in navigator) navigator.serviceWorker.getRegistrations().then((rs) => rs.forEach((r) => r.unregister()));
+
+    $('input-nickname').value = S.me.nickname;
+    $('user-avatar-preview').textContent = S.me.avatar;
+    $('avatar-picker-grid').innerHTML = AVATARS.map((a) =>
+      `<div class="avatar-opt ${a === S.me.avatar ? 'selected' : ''}">${a}</div>`).join('');
+    $('avatar-picker-grid').querySelectorAll('.avatar-opt').forEach((el) => {
+      el.onclick = () => {
+        S.me.avatar = el.textContent;
+        localStorage.setItem('x_avatar', S.me.avatar);
+        $('user-avatar-preview').textContent = S.me.avatar;
+        document.querySelectorAll('.avatar-opt').forEach((x) => x.classList.remove('selected'));
+        el.classList.add('selected');
+        sound('pop');
+      };
+    });
+    $('input-nickname').oninput = (e) => {
+      S.me.nickname = U.clip(e.target.value, 16) || 'Jogador';
+      localStorage.setItem('x_nickname', S.me.nickname);
+    };
+
+    const code = new URLSearchParams(location.search).get('sala');
+    if (code) {
+      $('input-room-code').value = code.toUpperCase().slice(0, 4);
+      $('join-card').classList.add('highlight');
+    }
+
+    if (typeof Peer === 'undefined') {
+      setStatus('off', 'PeerJS não carregou');
+    } else {
+      setStatus('online', 'Pronto');
+    }
+
+    $('btn-create-room').onclick = createRoom;
+    $('btn-join-room').onclick = joinRoom;
+    $('input-room-code').onkeydown = (e) => { if (e.key === 'Enter') joinRoom(); };
+
+    $('btn-copy-code').onclick = () => navigator.clipboard.writeText(S.room.code).then(() => toast(`Código ${S.room.code} copiado!`));
+    $('btn-copy-link').onclick = () => navigator.clipboard.writeText(`${location.origin}${location.pathname}?sala=${S.room.code}`)
+      .then(() => toast('Link copiado! Mande no WhatsApp ou Discord 🚀'));
+
+    const sendSettings = () => send({ t: 'lobby', op: 'settings', rounds: $('setting-rounds').value, time: $('setting-timer').value, difficulty: $('setting-difficulty').value });
+    ['setting-rounds', 'setting-timer', 'setting-difficulty'].forEach((id) => { $(id).onchange = sendSettings; });
+
+    $('btn-start-game').onclick = () => send({ t: 'lobby', op: 'start' });
+    $('btn-play-again').onclick = () => send({ t: 'lobby', op: 'start' });
+    $('btn-back-lobby').onclick = () => send({ t: 'lobby', op: 'lobby' });
+    $('btn-game-exit').onclick = () => { if (confirm('Encerrar o jogo e voltar ao lobby?')) send({ t: 'lobby', op: 'lobby' }); };
+
+    document.querySelectorAll('.emoji-btn').forEach((b) => { b.onclick = () => send({ t: 'react', emoji: b.dataset.emoji }); });
+
+    $('chat-fab').onclick = () => toggleChat();
+    $('chat-close').onclick = () => toggleChat(false);
+    const sendChat = () => {
+      const i = $('chat-input');
+      if (!i.value.trim()) return;
+      send({ t: 'chat', text: i.value });
+      i.value = '';
+    };
+    $('chat-send').onclick = sendChat;
+    $('chat-input').onkeydown = (e) => { if (e.key === 'Enter') sendChat(); };
+
+    $('btn-sound-toggle').textContent = window.soundEngine && window.soundEngine.muted ? '🔇' : '🔊';
+    $('btn-sound-toggle').onclick = () => { $('btn-sound-toggle').textContent = window.soundEngine.toggleMute() ? '🔇' : '🔊'; };
+    $('btn-logo-home').onclick = () => { if (!S.room || confirm('Sair da sala e voltar ao início?')) location.href = location.pathname; };
+
+    window.addEventListener('beforeunload', (e) => {
+      if (S.host && S.room && S.room.players.length > 1) { e.preventDefault(); e.returnValue = ''; }
+    });
+
+    setInterval(tickTimer, 200);
+    showScreen('welcome');
+  }
+
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', init);
+  else init();
+})();

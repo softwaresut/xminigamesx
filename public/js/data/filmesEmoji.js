@@ -1,0 +1,28 @@
+// Banco de dados: Adivinhe o Filme pelos Emojis
+window.FILMES_EMOJI_DATA = [
+  { emojis: "🚢🥶🚪", answer: "Titanic", accepted: ["titanic", "o titanic"] },
+  { emojis: "🦁👑🌅", answer: "O Rei Leão", accepted: ["o rei leao", "rei leao", "the lion king"] },
+  { emojis: "🧙‍♂️💍🌋", answer: "O Senhor dos Anéis", accepted: ["o senhor dos aneis", "senhor dos aneis", "lord of the rings"] },
+  { emojis: "🦖🏝️🚙", answer: "Jurassic Park", accepted: ["jurassic park", "parque dos dinossauros"] },
+  { emojis: "🎈🏠👴👦", answer: "Up Altas Aventuras", accepted: ["up", "up altas aventuras"] },
+  { emojis: "👻🚫🔫", answer: "Os Caça-Fantasmas", accepted: ["os caca fantasmas", "caca fantasmas", "ghostbusters"] },
+  { emojis: "🕷️🧑‍🎓🏙️", answer: "Homem-Aranha", accepted: ["homem aranha", "spider man"] },
+  { emojis: "🍫🏭🎩🎟️", answer: "A Fantástica Fábrica de Chocolate", accepted: ["a fantastica fabrica de chocolate", "fabrica de chocolate", "willy wonka"] },
+  { emojis: "👨‍🚀🚀🪐⏳", answer: "Interestelar", accepted: ["interestelar", "interstellar"] },
+  { emojis: "🐟🔍🌊", answer: "Procurando Nemo", accepted: ["procurando nemo", "finding nemo"] },
+  { emojis: "🦇🃏🌃", answer: "Batman O Cavaleiro das Trevas", accepted: ["batman", "o cavaleiro das trevas", "the dark knight"] },
+  { emojis: "💊🕶️💻🐇", answer: "Matrix", accepted: ["matrix", "the matrix"] },
+  { emojis: "👠👗👜😈", answer: "O Diabo Veste Prada", accepted: ["o diabo veste prada", "diabo veste prada"] },
+  { emojis: "🚗⚡🕰️🔥", answer: "De Volta para o Futuro", accepted: ["de volta para o futuro", "back to the future"] },
+  { emojis: "🧸🤠🚀🥔", answer: "Toy Story", accepted: ["toy story"] },
+  { emojis: "👨‍🍳🐀🍝🇫🇷", answer: "Ratatouille", accepted: ["ratatouille"] },
+  { emojis: "🧊❄️👸👭", answer: "Frozen", accepted: ["frozen", "uma aventura congelante"] },
+  { emojis: "🥊🏃‍♂️🥩🏆", answer: "Rocky Balboa", accepted: ["rocky", "rocky balboa"] },
+  { emojis: "👽🚲🌕👉", answer: "E.T. O Extraterrestre", accepted: ["et", "e t", "et o extraterrestre"] },
+  { emojis: "🧙⚡🦉🚂", answer: "Harry Potter", accepted: ["harry potter"] },
+  { emojis: "🏎️🏁👨‍👩‍👦💥", answer: "Velozes e Furiosos", accepted: ["velozes e furiosos", "fast and furious"] },
+  { emojis: "🍌👓💛👖", answer: "Minions", accepted: ["minions", "meu malvado favorito"] },
+  { emojis: "🧟‍♂️🧠🔫🏃", answer: "Guerra Mundial Z", accepted: ["guerra mundial z", "world war z"] },
+  { emojis: "💀🎸🇲🇽👦", answer: "Viva A Vida é uma Festa", accepted: ["viva", "viva a vida e uma festa", "coco"] },
+  { emojis: "🏹🔥👧🍞", answer: "Jogos Vorazes", accepted: ["jogos vorazes", "the hunger games"] }
+];

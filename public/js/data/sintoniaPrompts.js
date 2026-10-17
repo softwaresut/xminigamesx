@@ -1,0 +1,76 @@
+// Banco de dados: Sintonia (Conexão Mental / Pensar Igual)
+window.SINTONIA_PROMPTS = [
+  "Uma marca famosa de refrigerante",
+  "O que você não pode esquecer de levar para a praia",
+  "Um sabor clássico de pizza",
+  "Um animal com quatro patas",
+  "Um super-herói dos quadrinhos",
+  "Uma cor do arco-íris",
+  "Algo que sempre tem dentro da geladeira",
+  "Um eletrodoméstico da cozinha",
+  "Uma matéria escolar que a maioria dos alunos não gosta",
+  "Um esporte que se joga com as mãos",
+  "Uma fruta doce e suculenta",
+  "Algo que as pessoas fazem logo após acordar",
+  "Um vilão clássico do cinema ou animação",
+  "Uma rede social famosa",
+  "Um país da América do Sul",
+  "Algo que derrete fácil no sol",
+  "Um objeto que tem no estojo escolar",
+  "Uma desculpa para chegar atrasado",
+  "Um sabor de sorvete popular",
+  "Um desenho animado nostálgico",
+  "Uma coisa que dá muito medo no escuro",
+  "Um ingrediente indispensável de um hambúrguer",
+  "Um dia da semana que todo mundo gosta",
+  "Algo que as pessoas compram no cinema",
+  "Uma peça de roupa para dias de muito frio"
+];
+
+// Banco de dados: Quem é Mais Provável?
+window.MAIS_PROVAVEL_QUESTIONS = [
+  "Quem é mais provável de ser preso por uma besteira?",
+  "Quem é mais provável de ficar milionário do nada?",
+  "Quem é mais provável de gastar todo o salário no primeiro dia?",
+  "Quem é mais provável de sobreviver a um apocalipse zumbi?",
+  "Quem é mais provável de esquecer o próprio aniversário?",
+  "Quem é mais provável de chorar assistindo a um filme da Disney?",
+  "Quem é mais provável de cair no meio da rua fingindo que nada aconteceu?",
+  "Quem é mais provável de passar 3 dias sem sair do quarto jogando videogame?",
+  "Quem é mais provável de virar meme na internet?",
+  "Quem é mais provável de comer uma comida que caiu no chão há 10 segundos?",
+  "Quem é mais provável de mandar mensagem bêbado para o ex?",
+  "Quem é mais provável de se perder dentro de um shopping que já conhece?",
+  "Quem é mais provável de comprar algo inútil só porque estava na promoção?",
+  "Quem é mais provável de rir em um momento totalmente inapropriado?",
+  "Quem é mais provável de esquecer onde estacionou o carro?",
+  "Quem é mais provável de adotar 10 animais de rua?",
+  "Quem é mais provável de virar influenciador digital famoso?",
+  "Quem é mais provável de dormir durante uma festa ou show barulhento?",
+  "Quem é mais provável de iniciar uma briga por causa de jogo de tabuleiro?",
+  "Quem é mais provável de viajar para o lugar errado por engano?"
+];
+
+// Banco de dados: Palavras Embaralhadas (Anagrama Insano)
+window.ANAGRAMAS_DATA = [
+  { word: "ABACAXI", clue: "Fruta tropical ácida e com coroa" },
+  { word: "GUITARRA", clue: "Instrumento musical de rock" },
+  { word: "PIZZA", clue: "Comida italiana redonda e deliciosa" },
+  { word: "FUTEBOL", clue: "Paixão esportiva nacional do Brasil" },
+  { word: "CHOCOLATE", clue: "Doce feito a partir do cacau" },
+  { word: "BICICLETA", clue: "Veículo de duas rodas com pedais" },
+  { word: "DINOSSAURO", clue: "Criatura extinta da pré-história" },
+  { word: "COMPUTADOR", clue: "Máquina eletrônica de processamento" },
+  { word: "GIRAFA", clue: "Animal africano com pescoço muito comprido" },
+  { word: "ASTRONAUTA", clue: "Viajante e explorador do espaço" },
+  { word: "BORBOLETA", clue: "Inseto colorido que já foi lagarta" },
+  { word: "MELANCIA", clue: "Fruta grande, verde por fora e vermelha por dentro" },
+  { word: "SUBMARINO", clue: "Embarcação que navega sob a água" },
+  { word: "SUPERMERCADO", clue: "Lugar onde compramos mantimentos" },
+  { word: "HOSPITAL", clue: "Lugar de atendimento médico e internação" },
+  { word: "ESMERALDA", clue: "Pedra preciosa verde e valiosa" },
+  { word: "PAPAGAIO", clue: "Ave falante e muito colorida" },
+  { word: "GELADEIRA", clue: "Eletrodoméstico que conserva alimentos" },
+  { word: "PIRATA", clue: "Navegador fora-da-lei que busca tesouros" },
+  { word: "TELEFONE", clue: "Aparelho de comunicação a distância" }
+];
