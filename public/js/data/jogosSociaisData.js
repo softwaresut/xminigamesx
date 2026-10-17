@@ -1,11 +1,19 @@
-// Banco de dados: Contato, Quem Sou Eu, Impostor, Bomba e Prefere
+// Banco de dados expandido: Contato, Quem Sou Eu, Impostor, Bomba e Prefere
 
 // Contato (palavras secretas com dicas temáticas)
 window.CONTATO_WORDS = [
   "CHOCOLATE", "COMPUTADOR", "DINOSSAURO", "ELEFANTE", "GELADEIRA",
   "ASTRONAUTA", "BICICLETA", "BORBOLETA", "SUBMARINO", "TELEFONE",
   "MELANCIA", "HOSPITAL", "GUITARRA", "ABACAXI", "ESMERALDA",
-  "FUTEBOL", "TARTARUGA", "PIRATA", "CROCODILO", "FLORESTA"
+  "FUTEBOL", "TARTARUGA", "PIRATA", "CROCODILO", "FLORESTA",
+  "CACHORRO", "PAPAGAIO", "AEROPORTO", "DIAMANTE", "MORANGO",
+  "SANDUICHE", "CASTELO", "FOGUETE", "VAMPIRO", "CARNAVAL",
+  "PANQUECA", "BRIGADEIRO", "MICROFONE", "PIRAMIDE", "SURPRESA",
+  "CARROSSEL", "HORIZONTE", "FANTASMA", "PRINCESA", "AQUARIO",
+  "CAMALEAO", "ESCORPIAO", "GANGORRA", "HARMONIA", "INVENTOR",
+  "JARDINEIRO", "LABIRINTO", "METEORITO", "NATUREZA", "ORQUESTRA",
+  "PASSAPORTE", "QUIMICA", "RELAMPAGO", "SINISTRO", "TORMENTA",
+  "UNIVERSO", "VELOCIDADE", "ZEPPELIN", "ALBATROZ", "BARRACUDA"
 ];
 
 // Quem Sou Eu? (personagens/personalidades e categorias)
@@ -24,7 +32,32 @@ window.QUEM_SOU_EU_DATA = [
   { name: "Darth Vader", hint: "Vilão galáctico com máscara e respiração pesada" },
   { name: "Barbie", hint: "Boneca clássica loira com mil profissões" },
   { name: "Goku", hint: "Guerreiro Sayajin que busca as Esferas do Dragão" },
-  { name: "Chapolin Colorado", hint: "Herói com marreta biônica e anteninhas de vinil" }
+  { name: "Chapolin Colorado", hint: "Herói com marreta biônica e anteninhas de vinil" },
+  { name: "Lionel Messi", hint: "Craque argentino canhoto campeão da Copa de 2022" },
+  { name: "Cristiano Ronaldo", hint: "Atleta português com a famosa comemoração 'Siiiiu'" },
+  { name: "Faustão", hint: "Apresentador histórico do 'Ô loco, meu!'" },
+  { name: "Homem-Aranha", hint: "Herói adolescente que solta teias em Nova York" },
+  { name: "Coringa", hint: "Palhaço do crime e maior arqui-inimigo do Batman" },
+  { name: "Wandinha", hint: "Jovem gótica da Família Addams que nunca sorri" },
+  { name: "Elsa", hint: "Rainha do gelo que canta 'Livre Estou' em Frozen" },
+  { name: "Sonic", hint: "Ouriço azul velocista que adora anéis de ouro" },
+  { name: "Sherlock Holmes", hint: "Detetive britânico brilhante que usa dedução lógica" },
+  { name: "Deadpool", hint: "Mercenário tagarela imortal com roupa vermelha" },
+  { name: "Cleópatra", hint: "Última rainha histórica ativa do Reino Ptolemaico do Egito" },
+  { name: "Michael Jackson", hint: "O Rei do Pop conhecido pelo passo Moonwalk" },
+  { name: "Taylor Swift", hint: "Cantora pop americana recordista de turnês mundiais" },
+  { name: "Mônica", hint: "Dona da rua no Bairro do Limoeiro com coelhinho Sansão" },
+  { name: "Cebolinha", hint: "Menino que fala 'elado' e faz planos infalíveis" },
+  { name: "Pato Donald", hint: "Pato temperamental de roupa de marinheiro da Disney" },
+  { name: "Jack Sparrow", hint: "Capitão pirata excêntrico do navio Pérola Negra" },
+  { name: "Kratos", hint: "Deus da Guerra grego e nórdico de barba e machado" },
+  { name: "Minion", hint: "Criatura amarela de óculos que ama comer banana" },
+  { name: "Drácula", hint: "Conde vampiro lendário da Transilvânia" },
+  { name: "Tarzan", hint: "Homem criado por gorilas na selva que anda de cipó" },
+  { name: "Relâmpago McQueen", hint: "Carro de corrida vermelho número 95 da Copa Pistão" },
+  { name: "Steve", hint: "Personagem inicial de camiseta azul e picareta no Minecraft" },
+  { name: "Mulher-Maravilha", hint: "Guerreira amazona com laço da verdade e tiara" },
+  { name: "Scooby-Doo", hint: "Dogue alemão medroso que adora comer biscoitos caninos" }
 ];
 
 // Jogo do Impostor (Locais e pistas)
@@ -43,7 +76,22 @@ window.IMPOSTOR_LOCATIONS = [
   { location: "Parque de Diversões", clue: "Montanha-russa, algodão doce e brinquedos" },
   { location: "Delegacia", clue: "Policiais, celas e sirenes" },
   { location: "Show de Rock", clue: "Caixas de som, palco e multidão" },
-  { location: "Hotel de Luxo", clue: "Recepção, malas e serviço de quarto" }
+  { location: "Hotel de Luxo", clue: "Recepção, malas e serviço de quarto" },
+  { location: "Zoológico", clue: "Jaulas, animais e visitantes com crianças" },
+  { location: "Museu de Arte", clue: "Quadros na parede, esculturas e silêncio" },
+  { location: "Festa de Casamento", clue: "Noivos, bolo de três andares e valsa" },
+  { location: "Estação Espacial", clue: "Gravidade zero, trajes e visão da Terra" },
+  { location: "Tribunal do Júri", clue: "Juiz, martelo, advogados e testemunhas" },
+  { location: "Padaria", clue: "Cheiro de pão quente, balcão e café com leite" },
+  { location: "Barco Pirata", clue: "Velas negras, canhões, papagaio e convés" },
+  { location: "Acampamento na Floresta", clue: "Barracas, fogueira, repelente e estrelas" },
+  { location: "Cassino em Las Vegas", clue: "Roletas, cartas de baralho e caça-níqueis" },
+  { location: "Oficina Mecânica", clue: "Graxa, carros suspensos e ferramentas" },
+  { location: "Salão de Beleza", clue: "Secador de cabelo, espelhos e tesouras" },
+  { location: "Boate / Balada", clue: "DJ, luzes estroboscópicas e pista de dança" },
+  { location: "Feira Livre", clue: "Barracas de frutas, pastel frito e gritaria" },
+  { location: "Biblioteca", clue: "Prateleiras cheias de livros e pedidos de silêncio" },
+  { location: "Aeroporto", clue: "Check-in, esteira de malas e portão de embarque" }
 ];
 
 // Passa a Bomba (Categorias rápidas)
@@ -53,7 +101,17 @@ window.BOMBA_CATEGORIES = [
   "Coisas que têm na Cozinha", "Times de Futebol", "Nomes com a Letra M",
   "Instrumentos Musicais", "Coisas que Derretem", "Vilões dos Desenhos",
   "Atores Famosos", "Meios de Transporte", "Coisas que Fazem Barulho",
-  "Sobremesas", "Redes Sociais ou Apps", "Cidades do Brasil"
+  "Sobremesas", "Redes Sociais ou Apps", "Cidades do Brasil",
+  "Animais que Voam", "Partes do Corpo Humano", "Jogos de Videogame",
+  "Objetos de Praia", "Comidas que Vêm em Pacote", "Coisas Vermelhas",
+  "Profissões que Usam Uniforme", "Esportes com Bola", "Marcas de Celular",
+  "Nomes que Começam com a Letra A", "Peças de Roupa", "Coisas Afiadas",
+  "Coisas que têm no Banheiro", "Animais que Nadam", "Cidades do Mundo",
+  "Tipos de Bebida", "Brinquedos de Criança", "Coisas Geladas",
+  "Coisas que têm no Quarto", "Personagens da Disney", "Séries de TV",
+  "Bandas de Música", "Filmes Famosos", "Comidas Rápidas (Fast Food)",
+  "Coisas com Rodas", "Nomes de Flores", "Coisas que quebram fácil",
+  "Comidas Salgadas", "Cores do Arco-Íris", "Objetos que Cabem no Bolso"
 ];
 
 // O Que Você Prefere? (Dilemas)
@@ -67,5 +125,20 @@ window.PREFERE_DILEMAS = [
   { a: "Comer sua comida favorita em todas as refeições", b: "Nunca mais poder comer sua comida favorita" },
   { a: "Sempre saber quando alguém está mentindo para você", b: "Sempre conseguir mentir sem ninguém desconfiar" },
   { a: "Viver em um mundo sem frio", b: "Viver em um mundo sem calor" },
-  { a: "Ser invisível quando quiser", b: "Poder ler mentes quando quiser" }
+  { a: "Ser invisível quando quiser", b: "Poder ler mentes quando quiser" },
+  { a: "Ter que dançar toda vez que ouvir música", b: "Ter que cantar tudo o que for falar para sempre" },
+  { a: "Nunca mais pegar trânsito na vida", b: "Nunca mais pegar fila na vida" },
+  { a: "Poder pausar o tempo", b: "Poder voltar 5 minutos no tempo sempre que errar" },
+  { a: "Ter memória fotográfica perfeita de tudo", b: "Poder esquecer qualquer lembrança ruim quando quiser" },
+  { a: "Viver sem doces para sempre", b: "Viver sem comidas salgadas para sempre" },
+  { a: "Poder falar com todos os animais do mundo", b: "Falar fluentemente todas as línguas humanas da Terra" },
+  { a: "Ter 1 ano de férias pagas agora", b: "Trabalhar apenas 3 dias por semana pelo resto da vida" },
+  { a: "Morar sozinho em uma mansão gigante", b: "Morar em um apartamento pequeno com seus melhores amigos" },
+  { a: "Nunca mais sentir dor física", b: "Nunca mais sentir cansaço ou sono" },
+  { a: "Ser o melhor jogador de videogame do planeta", b: "Ser o melhor atleta esportivo do planeta" },
+  { a: "Saber todos os segredos do universo", b: "Saber tudo o que as pessoas pensam sobre você" },
+  { a: "Poder respirar debaixo d'água", b: "Poder resistir a qualquer queda de altura sem se machucar" },
+  { a: "Ter Wi-Fi ilimitado e perfeito no cérebro", b: "Nunca precisar de bateria em nenhum aparelho eletrônico" },
+  { a: "Tomar banho gelado pelo resto da vida", b: "Comer apenas comida requentada pelo resto da vida" },
+  { a: "Ser famoso no mundo inteiro e não ter privacidade", b: "Ser totalmente desconhecido mas extremamente rico" }
 ];

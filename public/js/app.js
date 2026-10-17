@@ -396,8 +396,18 @@
     $('input-room-code').onkeydown = (e) => { if (e.key === 'Enter') joinRoom(); };
 
     $('btn-copy-code').onclick = () => navigator.clipboard.writeText(S.room.code).then(() => toast(`Código ${S.room.code} copiado!`));
-    $('btn-copy-link').onclick = () => navigator.clipboard.writeText(`${location.origin}${location.pathname}?sala=${S.room.code}`)
-      .then(() => toast('Link copiado! Mande no WhatsApp ou Discord 🚀'));
+    $('btn-copy-link').onclick = () => {
+      const inviteUrl = `${location.origin}${location.pathname}?sala=${S.room.code}`;
+      if (navigator.share && window.innerWidth <= 768) {
+        navigator.share({
+          title: 'xMiniGamesx Party',
+          text: `Bora jogar xMiniGamesx! Entra na minha sala ${S.room.code}:`,
+          url: inviteUrl
+        }).catch(() => {});
+      } else if (navigator.clipboard) {
+        navigator.clipboard.writeText(inviteUrl).then(() => toast('Link copiado! Mande no WhatsApp ou Discord 🚀'));
+      }
+    };
 
     const sendSettings = () => send({ t: 'lobby', op: 'settings', rounds: $('setting-rounds').value, time: $('setting-timer').value, difficulty: $('setting-difficulty').value });
     ['setting-rounds', 'setting-timer', 'setting-difficulty'].forEach((id) => { $(id).onchange = sendSettings; });
