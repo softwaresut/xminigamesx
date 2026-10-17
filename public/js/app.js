@@ -91,16 +91,53 @@ function initApp() {
 }
 
 // Socket Connection & Events
+function updateConnectionStatus(status, text) {
+  const dot = document.getElementById('server-status-dot');
+  const txt = document.getElementById('server-status-text');
+  if (!dot || !txt) return;
+
+  if (status === 'online') {
+    dot.style.background = 'var(--acid-lime)';
+    dot.style.boxShadow = '0 0 10px var(--acid-lime)';
+    txt.textContent = 'ONLINE';
+    txt.style.color = 'var(--acid-lime)';
+  } else if (status === 'connecting') {
+    dot.style.background = 'var(--solar-yellow)';
+    dot.style.boxShadow = '0 0 8px var(--solar-yellow)';
+    txt.textContent = text || 'Conectando...';
+    txt.style.color = 'var(--solar-yellow)';
+  } else {
+    dot.style.background = 'var(--punch-pink)';
+    dot.style.boxShadow = '0 0 8px var(--punch-pink)';
+    txt.textContent = 'Desconectado';
+    txt.style.color = 'var(--punch-pink)';
+  }
+}
+
+// Socket Connection & Events
 function setupSocket() {
-  socket = io();
+  updateConnectionStatus('connecting', 'Conectando...');
+
+  socket = io({
+    transports: ['polling', 'websocket'],
+    reconnection: true,
+    reconnectionAttempts: 15,
+    reconnectionDelay: 1000
+  });
 
   socket.on('connect', () => {
     myId = socket.id;
     console.log('[Socket] Connected, ID:', myId);
+    updateConnectionStatus('online');
   });
 
   socket.on('disconnect', () => {
+    updateConnectionStatus('offline');
     showToast('Desconectado do servidor. Tentando reconectar...');
+  });
+
+  socket.on('connect_error', () => {
+    updateConnectionStatus('connecting', 'Acordando...');
   });
 
   // Room Events
@@ -821,38 +858,105 @@ function triggerConfetti() {
 // -------------------------------------------------------------
 // EVENT LISTENERS
 // -------------------------------------------------------------
-document.addEventListener('DOMContentLoaded', () => {
+function startApp() {
   initApp();
 
   // Create Room
-  document.getElementById('btn-create-room').addEventListener('click', () => {
-    if (!currentUser.nickname) {
-      showToast('Digite um apelido!');
-      return;
-    }
-    socket.emit('create_room', {
-      nickname: currentUser.nickname,
-      avatar: currentUser.avatar
+  const btnCreate = document.getElementById('btn-create-room');
+  if (btnCreate) {
+    btnCreate.addEventListener('click', () => {
+      const nickInput = document.getElementById('input-nickname');
+      const nick = (nickInput ? nickInput.value.trim() : '') || currentUser.nickname || 'Jogador 1';
+      currentUser.nickname = nick;
+      localStorage.setItem('x_nickname', nick);
+
+      if (!socket || !socket.connected) {
+        showToast('Servidor acordando no Render... Conectando na sala em instantes!');
+        btnCreate.disabled = true;
+        btnCreate.innerHTML = '<span>⏳</span> Conectando...';
+
+        socket.once('connect', () => {
+          btnCreate.innerHTML = '<span>⏳</span> Criando Sala...';
+          socket.emit('create_room', {
+            nickname: nick,
+            avatar: currentUser.avatar
+          }, (res) => {
+            btnCreate.disabled = false;
+            btnCreate.innerHTML = '<span>✨</span> Criar Sala Privada';
+            if (res && res.success) {
+              handleRoomJoined(res.room);
+            }
+          });
+        });
+
+        setTimeout(() => {
+          btnCreate.disabled = false;
+          btnCreate.innerHTML = '<span>✨</span> Criar Sala Privada';
+        }, 8000);
+        return;
+      }
+
+      btnCreate.disabled = true;
+      btnCreate.innerHTML = '<span>⏳</span> Criando Sala...';
+
+      socket.emit('create_room', {
+        nickname: nick,
+        avatar: currentUser.avatar
+      }, (res) => {
+        btnCreate.disabled = false;
+        btnCreate.innerHTML = '<span>✨</span> Criar Sala Privada';
+        if (res && res.success) {
+          handleRoomJoined(res.room);
+        } else if (res && res.error) {
+          showToast(res.error);
+        }
+      });
+
+      setTimeout(() => {
+        btnCreate.disabled = false;
+        btnCreate.innerHTML = '<span>✨</span> Criar Sala Privada';
+      }, 5000);
     });
-  });
+  }
 
   // Join Room
-  document.getElementById('btn-join-room').addEventListener('click', () => {
-    const code = document.getElementById('input-room-code').value.trim();
-    if (!code) {
-      showToast('Digite o código da sala!');
-      return;
-    }
-    if (!currentUser.nickname) {
-      showToast('Digite um apelido!');
-      return;
-    }
-    socket.emit('join_room', {
-      code,
-      nickname: currentUser.nickname,
-      avatar: currentUser.avatar
+  const btnJoin = document.getElementById('btn-join-room');
+  if (btnJoin) {
+    btnJoin.addEventListener('click', () => {
+      const codeInput = document.getElementById('input-room-code');
+      const code = (codeInput ? codeInput.value.trim() : '');
+      if (!code) {
+        showToast('Digite o código de 4 letras da sala!');
+        return;
+      }
+      const nickInput = document.getElementById('input-nickname');
+      const nick = (nickInput ? nickInput.value.trim() : '') || currentUser.nickname || 'Jogador';
+      currentUser.nickname = nick;
+      localStorage.setItem('x_nickname', nick);
+
+      btnJoin.disabled = true;
+      btnJoin.textContent = 'Entrando...';
+
+      socket.emit('join_room', {
+        code,
+        nickname: nick,
+        avatar: currentUser.avatar
+      }, (res) => {
+        btnJoin.disabled = false;
+        btnJoin.textContent = 'Entrar ➔';
+        if (res && res.success) {
+          handleRoomJoined(res.room);
+        } else if (res && res.error) {
+          showToast(res.error);
+        }
+      });
+
+      setTimeout(() => {
+        btnJoin.disabled = false;
+        btnJoin.textContent = 'Entrar ➔';
+      }, 5000);
     });
-  });
+  }
 
   // Copy Code
   document.getElementById('btn-copy-code').addEventListener('click', () => {
@@ -996,9 +1100,19 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   // Brand Logo Click
-  document.getElementById('btn-logo-home').addEventListener('click', () => {
-    if (confirm('Deseja voltar para a tela inicial?')) {
-      window.location.href = '/';
-    }
-  });
-});
+  const logoBtn = document.getElementById('btn-logo-home');
+  if (logoBtn) {
+    logoBtn.addEventListener('click', () => {
+      if (confirm('Deseja voltar para a tela inicial?')) {
+        window.location.href = '/';
+      }
+    });
+  }
+}
+
+// Safe Bootstrap: execute immediately if document is ready or on DOMContentLoaded
+if (document.readyState === 'loading') {
+  document.addEventListener('DOMContentLoaded', startApp);
+} else {
+  startApp();
+}
